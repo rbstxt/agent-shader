@@ -87,6 +87,11 @@ export async function renderShader(
           preserveDrawingBuffer: true,
         });
         if (!gl) throw new Error("WebGL 1 is unavailable in Chromium.");
+        if (/^[ \t]*#\s*extension\s+GL_OES_standard_derivatives\s*:\s*require\s*$/m.test(fragmentSource)) {
+          if (!gl.getExtension("OES_standard_derivatives")) {
+            throw new Error("OES_standard_derivatives is unavailable in Chromium WebGL 1.");
+          }
+        }
 
         const vertexSource = `precision highp float;
 attribute vec3 position;

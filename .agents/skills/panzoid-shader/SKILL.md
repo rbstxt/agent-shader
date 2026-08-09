@@ -1,6 +1,6 @@
 ---
 name: panzoid-shader
-description: Create, validate, build, and render-test Panzoid WebGL 1 fragment shaders and verified Shader Object JSON. Use for Panzoid shader effects, .glsl files, sampler2D image properties, customProperties generation, static illustrative defaults and bounds, visual regression checks, or tasks requiring Color, Opacity, Position, Rotation, Scale, vUvScaled, 16:9 coordinates, and source-over composition.
+description: Create, validate, build, and render-test Panzoid WebGL 1 / GLSL ES 1.00 fragment shaders and verified Shader Object JSON. Use for Panzoid shader effects, .glsl files, supported preprocessor syntax, GL_OES_standard_derivatives, sampler2D image properties, customProperties generation, static illustrative defaults and bounds, visual regression checks, or tasks requiring Color, Opacity, Position, Rotation, Scale, vUvScaled, 16:9 coordinates, and source-over composition.
 ---
 
 # Panzoid Shader
@@ -29,9 +29,22 @@ Use the repository CLI or MCP tools to produce a complete, tested Panzoid Shader
 - Treat `Scale` as a `vec2` multiplier with `[1, 1]` as the default.
 - Sample the source with `texture2D(tDiffuse, vUvScaled)` unless intentional distortion requires modified UVs.
 - Composite drawn pixels over the original texel with straight-alpha source-over.
-- Do not add anti-aliasing or derivative-based smoothing.
+- Do not add anti-aliasing unless the user explicitly asks for it. This is an agent decision, not a validator rule.
 - Do not write comments in shader code.
 - Assign the result to `gl_FragColor`.
+
+## GLSL ES 1.00 compatibility
+
+- Treat Panzoid Shader Object code as WebGL 1 / GLSL ES 1.00.
+- Do not write `#version 100` because Panzoid may prepend internal source.
+- Use `#define`, function-like macros, `#if`, `#ifdef`, `#ifndef`, `#elif`, `#else`, and `#endif` when useful.
+- Rely on `GL_ES`, `GL_FRAGMENT_PRECISION_HIGH`, and `__VERSION__ == 100` when conditional compilation is useful.
+- Use only `GL_OES_standard_derivatives` among optional extensions.
+- When using `dFdx`, `dFdy`, or `fwidth`, put `#extension GL_OES_standard_derivatives : require` before both precision declarations.
+- Use derivatives for patterns, normal estimation, change measurement, and analytical effects. Use them for AA only when the user explicitly requested AA.
+- Do not use `GL_EXT_shader_texture_lod`, `GL_EXT_frag_depth`, `GL_EXT_draw_buffers`, `texture2DLodEXT`, `texture2DGradEXT`, `gl_FragDepthEXT`, or `gl_FragData`.
+- Do not use `discard`; output the original `tDiffuse` texel or a source-over result outside the mask.
+- Do not use `#include`, imports, or glslify pragmas. Keep the delivered shader self-contained.
 
 ## Parameter contract
 

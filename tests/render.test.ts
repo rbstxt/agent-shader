@@ -40,3 +40,14 @@ test("renders a custom sampler2D with the bundled landscape", async () => {
   assert.equal(report.passed, true);
   assert.equal(report.defaultEffectCheck?.passed, true);
 });
+
+test("renders GL_OES_standard_derivatives and supported preprocessor directives", async () => {
+  const source = await readFile(resolve("fixtures/derivatives.glsl"), "utf8");
+  const report = await testShader(source, {}, {
+    width: 160,
+    height: 90,
+    outputDirectory: join(process.cwd(), ".test-output", "derivatives-report"),
+  });
+  assert.equal(report.passed, true);
+  assert.equal(report.defaultEffectCheck?.passed, true);
+});

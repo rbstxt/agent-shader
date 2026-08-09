@@ -138,6 +138,22 @@ agent-shader test fixtures/texture-blend.glsl \
 
 Rendering launches Chromium through Playwright and requests a WebGL 1 context with antialiasing disabled. It uses the Panzoid `common.glsl` contract, a 16:9 canvas by default, `uvScale = [1, 1]`, and a deterministic Python-generated X-Y grid as `tDiffuse`. Extra image samplers use the bundled CC0 landscape unless overridden with `--textures` or MCP `texturePaths`. See `samples/ATTRIBUTION.md` for provenance.
 
+### GLSL ES 1.00 compatibility
+
+Panzoid Shader Objects run as WebGL 1 / GLSL ES 1.00. The validator allows `#define`, function-like macros, `#if`, `#ifdef`, `#ifndef`, `#elif`, `#else`, and `#endif`. `GL_ES`, `GL_FRAGMENT_PRECISION_HIGH`, and `__VERSION__ == 100` are available for conditional compilation.
+
+The only allowed optional extension is:
+
+```glsl
+#extension GL_OES_standard_derivatives : require
+precision highp float;
+precision highp int;
+```
+
+Use that declaration before precision statements whenever `dFdx`, `dFdy`, or `fwidth` is used. The validator rejects every other `#extension`, `#version`, `#include`, glslify pragmas, `discard`, `texture2DLodEXT`, `texture2DGradEXT`, `gl_FragDepthEXT`, and `gl_FragData`.
+
+AA is omitted unless the user explicitly requests it. That choice belongs to the agent workflow rather than static validation; derivatives remain available for patterns, normal estimation, change measurement, and analytical effects.
+
 ```sh
 agent-shader render shader.glsl \
   --out render.png \
