@@ -31,13 +31,24 @@ function zeroValue(type: SupportedUniformType): ScalarOrVector {
   return [0, 0, 0];
 }
 
-function standardDefault(name: string, type: SupportedUniformType): ScalarOrVector {
+function standardDefault(name: string, type: SupportedUniformType): ScalarOrVector | undefined {
   if (name === "Opacity" && type === "float") return 1;
   if (name === "Position" && type === "vec2") return [0, 0];
   if (name === "Rotation" && type === "float") return 0;
   if (name === "Scale" && type === "vec2") return [1, 1];
   if (/^(?:Color|StartColor|EndColor)$/.test(name) && type === "vec3") return [1, 1, 1];
-  return zeroValue(type);
+  return undefined;
+}
+
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value);
+}
+
+function matchesType(value: ScalarOrVector, type: SupportedUniformType): boolean {
+  if (type === "float") return isFiniteNumber(value);
+  if (!Array.isArray(value)) return false;
+  const length = type === "vec2" ? 2 : 3;
+  return value.length === length && value.every(isFiniteNumber);
 }
 
 function isColor(name: string, type: SupportedUniformType, override?: ParameterOverride): boolean {
@@ -56,16 +67,40 @@ export function inferParameters(
   for (const uniform of uniforms) {
     if (uniform.name === "tDiffuse" || uniform.name === "uvScale") continue;
     if (uniform.type === "sampler2D") {
-      diagnostics.push({
-        severity: "error",
-        code: "unsupported-sampler",
-        message: `Only tDiffuse may use sampler2D; found ${uniform.name}.`,
+      const override = config.parameters?.[uniform.name];
+      if (override && Object.values(override).some((value) => value !== undefined)) {
+        diagnostics.push({
+          severity: "error",
+          code: "texture-override",
+          message: `${uniform.name} is an image property and cannot use numeric default, min, max, or color overrides.`,
+        });
+      }
+      parameters.push({
+        name: uniform.name,
+        type: "sampler2D",
+        default: null,
+        color: false,
       });
       continue;
     }
 
     const override = config.parameters?.[uniform.name];
-    const defaultValue = override?.default ?? standardDefault(uniform.name, uniform.type);
+    const inferredDefault = standardDefault(uniform.name, uniform.type);
+    if (override?.default === undefined && inferredDefault === undefined) {
+      diagnostics.push({
+        severity: "error",
+        code: "missing-default",
+        message: `${uniform.name} requires an explicit default chosen to make the shader effect easy to understand.`,
+      });
+    }
+    const defaultValue = override?.default ?? inferredDefault ?? zeroValue(uniform.type);
+    if (!matchesType(defaultValue, uniform.type)) {
+      diagnostics.push({
+        severity: "error",
+        code: "invalid-default",
+        message: `${uniform.name} default does not match ${uniform.type}.`,
+      });
+    }
     const min = override?.min ?? (uniform.name === "Opacity" ? 0 : undefined);
     const max = override?.max ?? (uniform.name === "Opacity" ? 1 : undefined);
     parameters.push({

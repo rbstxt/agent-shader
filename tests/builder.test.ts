@@ -5,7 +5,7 @@ import { resolve } from "node:path";
 import { buildShaderObject } from "../src/panzoid.js";
 
 test("builds the static Panzoid Shader Object shape", async () => {
-  const source = await readFile(resolve("fixtures/circle.frag"), "utf8");
+  const source = await readFile(resolve("fixtures/circle.glsl"), "utf8");
   const result = buildShaderObject(source);
   assert.equal(result.diagnostics.filter((item) => item.severity === "error").length, 0);
   const root = result.shaderObject[0] as Record<string, unknown>;
@@ -36,4 +36,25 @@ test("builds the static Panzoid Shader Object shape", async () => {
   assert.deepEqual((customProperties[4].objects as Array<Record<string, unknown>>)[0].keyframes, [
     { value: 1, frame: 0, tween: 1, controlPoints: [[-10, 0], [10, 0]] },
   ]);
+});
+
+test("serializes sampler2D properties with the exact uniform name", async () => {
+  const source = await readFile(resolve("fixtures/texture-blend.glsl"), "utf8");
+  const config = JSON.parse(await readFile(resolve("fixtures/texture-blend.config.json"), "utf8"));
+  const result = buildShaderObject(source, config);
+  assert.equal(result.diagnostics.filter((item) => item.severity === "error").length, 0);
+  const root = result.shaderObject[0] as Record<string, unknown>;
+  const data = (root.data as Array<Record<string, unknown>>)[0];
+  const properties = data.customProperties as Array<Record<string, unknown>>;
+  assert.deepEqual(properties[0], {
+    type: { custom: true, type: 8, assetType: 0, accept: "image/*", value: null },
+    properties: { name: "Landscape" },
+    value: null,
+  });
+});
+
+test("requires an illustrative default for every nonstandard numeric uniform", async () => {
+  const source = await readFile(resolve("fixtures/texture-blend.glsl"), "utf8");
+  const result = buildShaderObject(source);
+  assert.equal(result.diagnostics.some((item) => item.code === "missing-default"), true);
 });

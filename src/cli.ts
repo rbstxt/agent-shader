@@ -1,7 +1,7 @@
 #!/usr/bin/env node
-import { readFile, writeFile } from "node:fs/promises";
-import { dirname, resolve } from "node:path";
-import { mkdir } from "node:fs/promises";
+import { readFile, writeFile, mkdir, mkdtemp } from "node:fs/promises";
+import { dirname, join, resolve } from "node:path";
+import { tmpdir } from "node:os";
 import { spawn } from "node:child_process";
 import { createRequire } from "node:module";
 import { loadShaderConfig } from "./config.js";
@@ -9,7 +9,7 @@ import { buildShaderObject } from "./panzoid.js";
 import { renderShader } from "./renderer.js";
 import { testShader } from "./tester.js";
 import { validateShader } from "./validate.js";
-import type { UniformValues } from "./types.js";
+import type { TexturePaths, UniformValues } from "./types.js";
 
 interface ParsedArguments {
   command?: string;
@@ -38,10 +38,10 @@ function usage(): string {
   return [
     "agent-shader mcp",
     "agent-shader install-browser",
-    "agent-shader build <shader.frag> --out <shader.json> [--config <config.json>]",
-    "agent-shader validate <shader.frag>",
-    "agent-shader render <shader.frag> --out <render.png> [--values <values.json>] [--input <image>]",
-    "agent-shader test <shader.frag> --out-dir <directory> [--config <config.json>]",
+    "agent-shader build <shader.glsl> --out <shader.json> [--config <config.json>] [--textures <textures.json>]",
+    "agent-shader validate <shader.glsl>",
+    "agent-shader render <shader.glsl> --out <render.png> [--values <values.json>] [--textures <textures.json>] [--input <image>]",
+    "agent-shader test <shader.glsl> --out-dir <directory> [--config <config.json>] [--textures <textures.json>]",
   ].join("\n");
 }
 
@@ -72,6 +72,19 @@ async function loadValues(path?: string): Promise<UniformValues | undefined> {
   if (!path) return undefined;
   const text = path.trim().startsWith("{") ? path : await readFile(path, "utf8");
   return JSON.parse(text) as UniformValues;
+}
+
+async function loadTextures(path?: string): Promise<TexturePaths | undefined> {
+  if (!path) return undefined;
+  const text = path.trim().startsWith("{") ? path : await readFile(path, "utf8");
+  const parsed = JSON.parse(text) as unknown;
+  if (!parsed || Array.isArray(parsed) || typeof parsed !== "object") {
+    throw new Error("--textures must be a JSON object mapping sampler2D uniform names to image paths.");
+  }
+  for (const [name, value] of Object.entries(parsed)) {
+    if (typeof value !== "string") throw new Error(`Texture path for ${name} must be a string.`);
+  }
+  return parsed as TexturePaths;
 }
 
 async function writeJson(path: string, value: unknown): Promise<void> {
@@ -107,6 +120,11 @@ async function main(): Promise<void> {
 
   const source = await readFile(shaderPath, "utf8");
   const config = await loadShaderConfig(parsed.options.config);
+  const width = parsed.options.width ? Number(parsed.options.width) : undefined;
+  const height = parsed.options.height ? Number(parsed.options.height) : undefined;
+  const values = await loadValues(parsed.options.values);
+  const texturePaths = await loadTextures(parsed.options.textures);
+  const uvScale = parseUvScale(parsed.options["uv-scale"]);
 
   if (parsed.command === "validate") {
     const diagnostics = validateShader(source);
@@ -123,15 +141,25 @@ async function main(): Promise<void> {
       process.exitCode = 1;
       return;
     }
+    const testDirectory = await mkdtemp(join(tmpdir(), "agent-shader-build-"));
+    const report = await testShader(source, config, {
+      outputDirectory: testDirectory,
+      inputImagePath: parsed.options.input,
+      width,
+      height,
+      texturePaths,
+      uvScale,
+      background: parsed.options.background === "alpha-checker" ? "alpha-checker" : "checker",
+    });
+    if (!report.passed) {
+      process.stdout.write(`${JSON.stringify({ built: false, verified: false, diagnostics: result.diagnostics, report }, null, 2)}\n`);
+      process.exitCode = 1;
+      return;
+    }
     await writeJson(parsed.options.out, result.shaderObject);
-    process.stdout.write(`${JSON.stringify({ built: true, outputPath: resolve(parsed.options.out), parameters: result.parameters, diagnostics: result.diagnostics }, null, 2)}\n`);
+    process.stdout.write(`${JSON.stringify({ built: true, verified: true, outputPath: resolve(parsed.options.out), parameters: result.parameters, diagnostics: result.diagnostics, report }, null, 2)}\n`);
     return;
   }
-
-  const width = parsed.options.width ? Number(parsed.options.width) : undefined;
-  const height = parsed.options.height ? Number(parsed.options.height) : undefined;
-  const values = await loadValues(parsed.options.values);
-  const uvScale = parseUvScale(parsed.options["uv-scale"]);
 
   if (parsed.command === "render") {
     if (!parsed.options.out) throw new Error("render requires --out.");
@@ -141,6 +169,7 @@ async function main(): Promise<void> {
       width,
       height,
       values,
+      texturePaths,
       uvScale,
       background: parsed.options.background === "alpha-checker" ? "alpha-checker" : "checker",
     });
@@ -155,6 +184,7 @@ async function main(): Promise<void> {
       width,
       height,
       values,
+      texturePaths,
       uvScale,
       background: parsed.options.background === "alpha-checker" ? "alpha-checker" : "checker",
     });

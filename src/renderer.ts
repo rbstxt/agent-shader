@@ -1,5 +1,6 @@
 import { mkdir, readFile } from "node:fs/promises";
 import { dirname, extname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";
 import { inferParameters } from "./uniforms.js";
 import type {
@@ -23,6 +24,22 @@ async function imageDataUrl(path?: string): Promise<string | undefined> {
   return `data:${mimeType(path)};base64,${data.toString("base64")}`;
 }
 
+async function bundledSampleDataUrl(name: string): Promise<string | undefined> {
+  const moduleDirectory = dirname(fileURLToPath(import.meta.url));
+  const candidates = [
+    resolve(moduleDirectory, "../../samples", name),
+    resolve(moduleDirectory, "../samples", name),
+  ];
+  for (const candidate of candidates) {
+    try {
+      return await imageDataUrl(candidate);
+    } catch (error) {
+      if (!(error instanceof Error && "code" in error && error.code === "ENOENT")) throw error;
+    }
+  }
+  return undefined;
+}
+
 export async function renderShader(
   source: string,
   config: ShaderConfig = {},
@@ -36,10 +53,20 @@ export async function renderShader(
   if (errors.length > 0) throw new Error(errors.map((item) => item.message).join("\n"));
 
   const defaults: UniformValues = Object.fromEntries(
-    inferred.parameters.map((parameter) => [parameter.name, parameter.default]),
+    inferred.parameters
+      .filter((parameter) => parameter.type !== "sampler2D" && parameter.default !== null)
+      .map((parameter) => [parameter.name, parameter.default as ScalarOrVector]),
   );
   const values = { ...defaults, ...(options.values ?? {}) };
-  const inputDataUrl = await imageDataUrl(options.inputImagePath);
+  const inputDataUrl = await imageDataUrl(options.inputImagePath) ?? await bundledSampleDataUrl("xy-grid.png");
+  const defaultTextureDataUrl = await bundledSampleDataUrl("landscape.jpg") ?? inputDataUrl;
+  const textureDataUrls: Record<string, string | undefined> = {};
+  for (const parameter of inferred.parameters) {
+    if (parameter.type !== "sampler2D") continue;
+    textureDataUrls[parameter.name] = options.texturePaths?.[parameter.name]
+      ? await imageDataUrl(options.texturePaths[parameter.name])
+      : defaultTextureDataUrl;
+  }
   const browser = await chromium.launch({
     headless: true,
     args: ["--enable-webgl", "--ignore-gpu-blocklist", "--use-angle=swiftshader"],
@@ -49,7 +76,7 @@ export async function renderShader(
     const page = await browser.newPage({ viewport: { width, height }, deviceScaleFactor: 1 });
     await page.setContent(`<canvas id="shader" width="${width}" height="${height}"></canvas>`);
     const pixelSummary = await page.evaluate(
-      async ({ fragmentSource, width, height, uvScale, uniforms, declarations, inputDataUrl, background }) => {
+      async ({ fragmentSource, width, height, uvScale, uniforms, declarations, inputDataUrl, textureDataUrls, background }) => {
         const canvas = document.getElementById("shader") as HTMLCanvasElement;
         const gl = canvas.getContext("webgl", {
           alpha: true,
@@ -140,43 +167,53 @@ void main()
         gl.uniformMatrix4fv(gl.getUniformLocation(program, "modelViewMatrix"), false, identity);
         gl.uniform2f(gl.getUniformLocation(program, "uvScale"), uvScale[0], uvScale[1]);
 
-        const texture = gl.createTexture();
-        gl.activeTexture(gl.TEXTURE0);
-        gl.bindTexture(gl.TEXTURE_2D, texture);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-        gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, 1);
-
-        if (inputDataUrl) {
-          const image = await new Promise<HTMLImageElement>((resolveImage, rejectImage) => {
-            const item = new Image();
-            item.onload = () => resolveImage(item);
-            item.onerror = () => rejectImage(new Error("Unable to decode input image."));
-            item.src = inputDataUrl;
-          });
-          gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image);
-        } else {
-          const size = 64;
-          const pixels = new Uint8Array(size * size * 4);
-          for (let y = 0; y < size; y += 1) {
-            for (let x = 0; x < size; x += 1) {
-              const offset = (y * size + x) * 4;
-              const light = ((x >> 3) + (y >> 3)) % 2 === 0;
-              pixels[offset] = light ? 220 : 48;
-              pixels[offset + 1] = light ? 224 : 54;
-              pixels[offset + 2] = light ? 232 : 68;
-              pixels[offset + 3] = background === "alpha-checker" && !light ? 96 : 255;
+        const bindTexture = async (unit: number, dataUrl?: string) => {
+          const texture = gl.createTexture();
+          gl.activeTexture(gl.TEXTURE0 + unit);
+          gl.bindTexture(gl.TEXTURE_2D, texture);
+          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+          gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, 1);
+          if (dataUrl) {
+            const image = await new Promise<HTMLImageElement>((resolveImage, rejectImage) => {
+              const item = new Image();
+              item.onload = () => resolveImage(item);
+              item.onerror = () => rejectImage(new Error("Unable to decode input image."));
+              item.src = dataUrl;
+            });
+            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image);
+          } else {
+            const size = 64;
+            const pixels = new Uint8Array(size * size * 4);
+            for (let y = 0; y < size; y += 1) {
+              for (let x = 0; x < size; x += 1) {
+                const offset = (y * size + x) * 4;
+                const light = ((x >> 3) + (y >> 3)) % 2 === 0;
+                pixels[offset] = light ? 220 : 48;
+                pixels[offset + 1] = light ? 224 : 54;
+                pixels[offset + 2] = light ? 232 : 68;
+                pixels[offset + 3] = background === "alpha-checker" && !light ? 96 : 255;
+              }
             }
+            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, size, size, 0, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
           }
-          gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, size, size, 0, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
-        }
+        };
+
+        await bindTexture(0, inputDataUrl);
         gl.uniform1i(gl.getUniformLocation(program, "tDiffuse"), 0);
 
+        let textureUnit = 1;
         for (const declaration of declarations) {
           const location = gl.getUniformLocation(program, declaration.name);
           if (location === null) continue;
+          if (declaration.type === "sampler2D") {
+            await bindTexture(textureUnit, textureDataUrls[declaration.name]);
+            gl.uniform1i(location, textureUnit);
+            textureUnit += 1;
+            continue;
+          }
           const value = uniforms[declaration.name] as number | number[] | undefined;
           if (value === undefined) continue;
           if (declaration.type === "float") gl.uniform1f(location, value as number);
@@ -235,6 +272,7 @@ void main()
         uniforms: values as Record<string, ScalarOrVector>,
         declarations: inferred.parameters.map(({ name, type }) => ({ name, type })),
         inputDataUrl,
+        textureDataUrls,
         background: options.background ?? "checker",
       },
     );

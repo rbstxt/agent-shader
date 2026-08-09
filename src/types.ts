@@ -21,8 +21,8 @@ export interface ShaderConfig {
 
 export interface ParameterSpec {
   name: string;
-  type: SupportedUniformType;
-  default: ScalarOrVector;
+  type: UniformType;
+  default: ScalarOrVector | null;
   min?: number | [number, number] | [number, number, number];
   max?: number | [number, number] | [number, number, number];
   color: boolean;
@@ -41,12 +41,14 @@ export interface BuildResult {
 }
 
 export type UniformValues = Record<string, ScalarOrVector>;
+export type TexturePaths = Record<string, string>;
 
 export interface RenderOptions {
   width?: number;
   height?: number;
   uvScale?: [number, number];
   values?: UniformValues;
+  texturePaths?: TexturePaths;
   outputPath?: string;
   inputImagePath?: string;
   background?: "checker" | "alpha-checker";
@@ -67,11 +69,9 @@ export interface RenderResult {
   pixelSummary: PixelSummary;
 }
 
-export interface BoundaryCheck {
-  parameter: string;
-  boundary: "min" | "max";
-  boundaryHash: string;
-  outsideHash: string;
+export interface DefaultEffectCheck {
+  defaultHash: string;
+  inputHash: string;
   passed: boolean;
 }
 
@@ -79,5 +79,5 @@ export interface TestReport {
   passed: boolean;
   diagnostics: Diagnostic[];
   defaultRender?: RenderResult;
-  boundaryChecks: BoundaryCheck[];
+  defaultEffectCheck?: DefaultEffectCheck;
 }

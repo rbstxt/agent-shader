@@ -10,7 +10,7 @@ import { buildShaderObject } from "./panzoid.js";
 import { renderShader } from "./renderer.js";
 import { testShader } from "./tester.js";
 import { validateShader } from "./validate.js";
-import type { UniformValues } from "./types.js";
+import type { TexturePaths, UniformValues } from "./types.js";
 
 const valueSchema = z.union([
   z.number(),
@@ -22,6 +22,20 @@ const sourceFields = {
   shaderPath: z.string().optional().describe("Path to a Panzoid fragment shader."),
   shaderSource: z.string().optional().describe("Inline Panzoid fragment shader source."),
   configPath: z.string().optional().describe("Optional JSON config path for nonstandard defaults or bounds."),
+};
+
+const previewFields = {
+  inputImagePath: z.string().optional(),
+  texturePaths: z.record(z.string(), z.string()).optional(),
+  width: z.number().int().positive().default(960),
+  height: z.number().int().positive().default(540),
+  uvScale: z.tuple([z.number(), z.number()]).default([1, 1]),
+  alphaChecker: z.boolean().default(false),
+};
+
+const renderFields = {
+  ...previewFields,
+  values: z.record(z.string(), valueSchema).optional(),
 };
 
 async function loadSource(shaderPath?: string, shaderSource?: string): Promise<string> {
@@ -43,7 +57,7 @@ function textResult(value: unknown) {
 
 function createServer(): McpServer {
   const server = new McpServer(
-    { name: "agent-shader", version: "0.1.0" },
+    { name: "agent-shader", version: "0.1.2" },
     { capabilities: { tools: {} } },
   );
 
@@ -68,24 +82,49 @@ function createServer(): McpServer {
     "build_shader_object",
     {
       title: "Build Panzoid Shader Object",
-      description: "Build deterministic Panzoid Shader Object JSON with static parameter values.",
+      description: "Build Panzoid Shader Object JSON only after validation, WebGL 1 rendering, and the visible-default check pass.",
       inputSchema: z.object({
         ...sourceFields,
+        ...previewFields,
         outputPath: z.string().optional().describe("Optional JSON output path."),
       }),
     },
-    async ({ shaderPath, shaderSource, configPath, outputPath }) => {
+    async ({ shaderPath, shaderSource, configPath, outputPath, inputImagePath, texturePaths, width, height, uvScale, alphaChecker }) => {
       const source = await loadSource(shaderPath, shaderSource);
       const config = await loadShaderConfig(configPath);
       const result = buildShaderObject(source, config);
-      const writtenPath = outputPath ? await writeJson(outputPath, result.shaderObject) : undefined;
-      return textResult({
-        built: !result.diagnostics.some((item) => item.severity === "error"),
+      if (result.diagnostics.some((item) => item.severity === "error")) {
+        return textResult({ built: false, verified: false, parameters: result.parameters, diagnostics: result.diagnostics });
+      }
+      const directory = await mkdtemp(join(tmpdir(), "agent-shader-build-"));
+      const report = await testShader(source, config, {
+        outputDirectory: directory,
+        inputImagePath,
+        texturePaths: texturePaths as TexturePaths | undefined,
+        width,
+        height,
+        uvScale,
+        background: alphaChecker ? "alpha-checker" : "checker",
+      });
+      const writtenPath = outputPath && report.passed ? await writeJson(outputPath, result.shaderObject) : undefined;
+      const payload = {
+        built: report.passed,
+        verified: report.passed,
         outputPath: writtenPath,
         parameters: result.parameters,
         diagnostics: result.diagnostics,
-        shaderObject: writtenPath ? undefined : result.shaderObject,
-      });
+        report,
+        shaderObject: report.passed && !writtenPath ? result.shaderObject : undefined,
+      };
+      const content: Array<
+        { type: "text"; text: string } | { type: "image"; data: string; mimeType: string }
+      > = [{ type: "text", text: JSON.stringify(payload, null, 2) }];
+      const imagePath = report.defaultRender?.outputPath;
+      if (report.passed && imagePath) {
+        const image = await readFile(imagePath);
+        content.push({ type: "image", data: image.toString("base64"), mimeType: "image/png" });
+      }
+      return { content };
     },
   );
 
@@ -97,15 +136,10 @@ function createServer(): McpServer {
       inputSchema: z.object({
         ...sourceFields,
         outputPath: z.string().optional(),
-        inputImagePath: z.string().optional(),
-        width: z.number().int().positive().default(960),
-        height: z.number().int().positive().default(540),
-        uvScale: z.tuple([z.number(), z.number()]).default([1, 1]),
-        values: z.record(z.string(), valueSchema).optional(),
-        alphaChecker: z.boolean().default(false),
+        ...renderFields,
       }),
     },
-    async ({ shaderPath, shaderSource, configPath, outputPath, inputImagePath, width, height, uvScale, values, alphaChecker }) => {
+    async ({ shaderPath, shaderSource, configPath, outputPath, inputImagePath, texturePaths, width, height, uvScale, values, alphaChecker }) => {
       const source = await loadSource(shaderPath, shaderSource);
       const config = await loadShaderConfig(configPath);
       let renderPath = outputPath;
@@ -120,6 +154,7 @@ function createServer(): McpServer {
         height,
         uvScale,
         values: values as UniformValues | undefined,
+        texturePaths: texturePaths as TexturePaths | undefined,
         background: alphaChecker ? "alpha-checker" : "checker",
       });
       const image = await readFile(renderPath);
@@ -136,19 +171,14 @@ function createServer(): McpServer {
     "test_shader",
     {
       title: "Test Panzoid shader",
-      description: "Run validation, WebGL 1 rendering, PNG output, and visual min/max saturation checks.",
+      description: "Run validation, WebGL 1 rendering, PNG output, and a visible-default check.",
       inputSchema: z.object({
         ...sourceFields,
         outputDirectory: z.string().optional(),
-        inputImagePath: z.string().optional(),
-        width: z.number().int().positive().default(960),
-        height: z.number().int().positive().default(540),
-        uvScale: z.tuple([z.number(), z.number()]).default([1, 1]),
-        values: z.record(z.string(), valueSchema).optional(),
-        alphaChecker: z.boolean().default(false),
+        ...renderFields,
       }),
     },
-    async ({ shaderPath, shaderSource, configPath, outputDirectory, inputImagePath, width, height, uvScale, values, alphaChecker }) => {
+    async ({ shaderPath, shaderSource, configPath, outputDirectory, inputImagePath, texturePaths, width, height, uvScale, values, alphaChecker }) => {
       const source = await loadSource(shaderPath, shaderSource);
       const config = await loadShaderConfig(configPath);
       const directory = outputDirectory ?? await mkdtemp(join(tmpdir(), "agent-shader-test-"));
@@ -159,6 +189,7 @@ function createServer(): McpServer {
         height,
         uvScale,
         values: values as UniformValues | undefined,
+        texturePaths: texturePaths as TexturePaths | undefined,
         background: alphaChecker ? "alpha-checker" : "checker",
       });
       const imagePath = report.defaultRender?.outputPath;

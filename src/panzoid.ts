@@ -53,7 +53,7 @@ function componentDescriptor(
 }
 
 function scalarProperty(parameter: ParameterSpec) {
-  const value = vectorValue(parameter.default, 0);
+  const value = vectorValue(parameter.default ?? 0, 0);
   return {
     type: {
       custom: true,
@@ -71,7 +71,7 @@ function vectorProperty(parameter: ParameterSpec) {
   const count = parameter.type === "vec2" ? 2 : 3;
   const componentNames = parameter.color ? ["R", "G", "B"] : ["X", "Y", "Z"];
   const groupType = parameter.color ? 4 : parameter.type === "vec2" ? 1 : 2;
-  const values = Array.from({ length: count }, (_, index) => vectorValue(parameter.default, index));
+  const values = Array.from({ length: count }, (_, index) => vectorValue(parameter.default ?? 0, index));
   return {
     type: {
       custom: true,
@@ -93,6 +93,19 @@ function vectorProperty(parameter: ParameterSpec) {
 }
 
 function customProperty(parameter: ParameterSpec) {
+  if (parameter.type === "sampler2D") {
+    return {
+      type: {
+        custom: true,
+        type: 8,
+        assetType: 0,
+        accept: "image/*",
+        value: null,
+      },
+      properties: { name: parameter.name },
+      value: null,
+    };
+  }
   return parameter.type === "float" ? scalarProperty(parameter) : vectorProperty(parameter);
 }
 

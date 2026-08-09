@@ -11,7 +11,7 @@ This repository contains three independently installable pieces:
 - `agent-shader` MCP server: the same capabilities exposed as local MCP tools
 - `panzoid-shader`: a portable Agent Skill for generating shaders that follow the Panzoid conventions
 
-The core model is intentionally static. Generated Panzoid parameters use `animated: false` and one value at frame zero; animation and keyframe inputs are not accepted.
+The core model is intentionally static. Generated Panzoid parameters use `animated: false` and one value at frame zero; animation and keyframe inputs are not accepted. A build writes JSON only after validation, Chromium WebGL 1 compilation and rendering, and a visible-default check pass.
 
 ## Requirements
 
@@ -60,19 +60,19 @@ agent-shader install-browser
 
 ```sh
 npx -y agent-shader@latest install-browser
-npx -y agent-shader@latest validate shader.frag
+npx -y agent-shader@latest validate shader.glsl
 ```
 
 ### Commands
 
 ```sh
-agent-shader validate fixtures/circle.frag
-agent-shader build fixtures/circle.frag --out circle.json
-agent-shader render fixtures/circle.frag --out circle.png
-agent-shader test fixtures/circle.frag --out-dir circle-test
+agent-shader validate fixtures/circle.glsl
+agent-shader build fixtures/circle.glsl --out circle.json
+agent-shader render fixtures/circle.glsl --out circle.png
+agent-shader test fixtures/circle.glsl --out-dir circle-test
 ```
 
-Use `--config config.json` only for nonstandard defaults or explicit ranges:
+Every nonstandard numeric uniform requires an explicit default chosen to demonstrate its behavior clearly. Use `--config config.json` for those defaults or for explicit ranges:
 
 ```json
 {
@@ -97,14 +97,49 @@ Standard parameters are inferred without configuration:
 | `Rotation` | `float` | `0` | omitted |
 | `Scale` | `vec2` | `[1, 1]` | omitted |
 
-The test command renders the default image and probes every declared minimum and maximum. A bound passes only when rendering at the boundary is pixel-identical to rendering outside it.
+The test command renders the default image and verifies that it differs visibly from the unmodified input. The agent must also inspect the output PNG before handing off the JSON.
+
+`min` and `max` are authoring decisions, not automated render tests. Do not add them merely to describe an intended, conventional, or useful range. Set a bound only when changing the value farther beyond that point produces no additional visual change; otherwise omit it. `Opacity` uses `0..1` because generated shaders clamp it and values outside that range therefore cannot change the result.
+
+### Image uniforms
+
+Each additional `uniform sampler2D Name;` becomes this Panzoid custom property, with `properties.name` exactly matching the GLSL uniform:
+
+```json
+{
+  "type": {
+    "custom": true,
+    "type": 8,
+    "assetType": 0,
+    "accept": "image/*",
+    "value": null
+  },
+  "properties": { "name": "Name" },
+  "value": null
+}
+```
+
+Provide images for rendering as a JSON map:
+
+```json
+{
+  "Landscape": "/absolute/path/to/landscape.jpg"
+}
+```
+
+```sh
+agent-shader test fixtures/texture-blend.glsl \
+  --config fixtures/texture-blend.config.json \
+  --textures textures.json \
+  --out-dir texture-test
+```
 
 ### Rendering
 
-Rendering launches Chromium through Playwright and requests a WebGL 1 context with antialiasing disabled. It uses the Panzoid `common.glsl` contract, a 16:9 canvas by default, `uvScale = [1, 1]`, and a deterministic checkerboard `tDiffuse`.
+Rendering launches Chromium through Playwright and requests a WebGL 1 context with antialiasing disabled. It uses the Panzoid `common.glsl` contract, a 16:9 canvas by default, `uvScale = [1, 1]`, and a deterministic Python-generated X-Y grid as `tDiffuse`. Extra image samplers use the bundled CC0 landscape unless overridden with `--textures` or MCP `texturePaths`. See `samples/ATTRIBUTION.md` for provenance.
 
 ```sh
-agent-shader render shader.frag \
+agent-shader render shader.glsl \
   --out render.png \
   --width 1920 \
   --height 1080 \
@@ -203,6 +238,8 @@ The MCP server exposes:
 - `validate_shader`
 - `render_shader`
 - `test_shader`
+
+`build_shader_object` returns JSON only after its complete verification pass and includes the default preview PNG so the agent can inspect the exact generated defaults.
 
 Rendering tools require the one-time browser installation:
 
@@ -495,7 +532,7 @@ mcp
 Ask the agent:
 
 ```text
-Use agent-shader to validate and render-test fixtures/circle.frag, then show the render and summarize any diagnostics.
+Use agent-shader to validate and render-test fixtures/circle.glsl, then show the render and summarize any diagnostics.
 ```
 
 The agent should call `validate_shader` or `test_shader`; render tools should return a PNG in addition to their JSON report.
