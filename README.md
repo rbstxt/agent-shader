@@ -154,6 +154,8 @@ Use that declaration before precision statements whenever `dFdx`, `dFdy`, or `fw
 
 AA is omitted unless the user explicitly requests it. That choice belongs to the agent workflow rather than static validation; derivatives remain available for patterns, normal estimation, change measurement, and analytical effects.
 
+Comments and resolution-like identifiers produce advisory warnings rather than validation errors. Agents normally omit them, but may keep them when the user explicitly requests them or the effect genuinely needs them. The validator does not require a recognizable `clamp(Opacity, 0.0, 1.0)` expression; Opacity handling is left to shader authoring and render verification.
+
 ```sh
 agent-shader render shader.glsl \
   --out render.png \

@@ -57,7 +57,7 @@ function textResult(value: unknown) {
 
 function createServer(): McpServer {
   const server = new McpServer(
-    { name: "agent-shader", version: "0.1.3" },
+    { name: "agent-shader", version: "0.1.4" },
     { capabilities: { tools: {} } },
   );
 

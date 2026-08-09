@@ -9,12 +9,26 @@ test("accepts the circle fixture", async () => {
   assert.equal(validateShader(source).filter((item) => item.severity === "error").length, 0);
 });
 
-test("rejects u-prefixed parameters and comments", async () => {
+test("rejects u-prefixed parameters and only warns about comments", async () => {
   const source = await readFile(resolve("fixtures/circle.glsl"), "utf8");
   const invalid = source.replace("uniform float Opacity;", "uniform float uOpacity;\n// bad");
-  const codes = validateShader(invalid).map((item) => item.code);
-  assert.ok(codes.includes("uniform-prefix"));
-  assert.ok(codes.includes("comments"));
+  const diagnostics = validateShader(invalid);
+  assert.ok(diagnostics.some((item) => item.code === "uniform-prefix" && item.severity === "error"));
+  assert.ok(diagnostics.some((item) => item.code === "comments" && item.severity === "warning"));
+});
+
+test("only warns about resolution-like identifiers", async () => {
+  const source = await readFile(resolve("fixtures/circle.glsl"), "utf8");
+  const withResolution = source.replace("uniform vec3 Color;", "uniform vec3 Color;\nuniform vec2 Resolution;");
+  const diagnostics = validateShader(withResolution);
+  assert.ok(diagnostics.some((item) => item.code === "resolution" && item.severity === "warning"));
+  assert.equal(diagnostics.some((item) => item.code === "resolution" && item.severity === "error"), false);
+});
+
+test("does not require a visible Opacity clamp", async () => {
+  const source = await readFile(resolve("fixtures/circle.glsl"), "utf8");
+  const unclamped = source.replace("clamp(Opacity, 0.0, 1.0)", "Opacity");
+  assert.equal(validateShader(unclamped).some((item) => item.code === "opacity-clamp"), false);
 });
 
 test("accepts the supported preprocessor and derivative extension", async () => {

@@ -21,8 +21,7 @@ Use the repository CLI or MCP tools to produce a complete, tested Panzoid Shader
 
 - Start with `precision highp float;` and `precision highp int;`.
 - Declare `uniform sampler2D tDiffuse;` and `varying vec2 vUvScaled;`.
-- Use `vUvScaled` as the only screen-space UV source.
-- Do not use resolution-like uniforms.
+- Prefer `vUvScaled` as the screen-space UV source. Add a resolution-like uniform only when the user explicitly requests it or the effect genuinely needs externally supplied dimensions.
 - Map effect space with `vec2 p = vUvScaled * 2.0 - 1.0;`.
 - Subtract `Position`, then scale centered x by `16.0 / 9.0`.
 - Express `Rotation` in clockwise degrees.
@@ -30,7 +29,7 @@ Use the repository CLI or MCP tools to produce a complete, tested Panzoid Shader
 - Sample the source with `texture2D(tDiffuse, vUvScaled)` unless intentional distortion requires modified UVs.
 - Composite drawn pixels over the original texel with straight-alpha source-over.
 - Do not add anti-aliasing unless the user explicitly asks for it. This is an agent decision, not a validator rule.
-- Do not write comments in shader code.
+- Omit shader comments by default. Include them when the user explicitly requests them or they are materially useful for the requested delivery.
 - Assign the result to `gl_FragColor`.
 
 ## GLSL ES 1.00 compatibility

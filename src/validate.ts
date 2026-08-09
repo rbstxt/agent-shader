@@ -36,8 +36,6 @@ export function validateShader(source: string): Diagnostic[] {
   }
 
   const forbiddenPatterns: Array<[string, RegExp, string]> = [
-    ["comments", /\/\/|\/\*|\*\//, "Shader code must not contain comments."],
-    ["resolution", /\b(?:iResolution|resolution|uResolution|viewportSize|screenSize)\b/i, "Resolution-like identifiers are forbidden."],
     ["discard", /\bdiscard\b/, "discard is forbidden because it can make Panzoid Shader Object output black."],
     ["import-syntax", /\bimport\b/, "GLSL ES 1.00 has no standard import syntax."],
     ["unsupported-extension-symbol", /\b(?:texture2DLodEXT|texture2DGradEXT|gl_FragDepthEXT|gl_FragData)\b/, "Unsupported WebGL 1 extension symbol detected."],
@@ -45,6 +43,15 @@ export function validateShader(source: string): Diagnostic[] {
 
   for (const [code, pattern, message] of forbiddenPatterns) {
     if (pattern.test(source)) diagnostics.push(error(code, message));
+  }
+
+  const advisoryPatterns: Array<[string, RegExp, string]> = [
+    ["comments", /\/\/|\/\*|\*\//, "Shader code contains comments; keep them only when the user requested or needs them."],
+    ["resolution", /\b(?:iResolution|resolution|uResolution|viewportSize|screenSize)\b/i, "Resolution-like identifiers are usually unnecessary with vUvScaled; keep them only when explicitly needed."],
+  ];
+
+  for (const [code, pattern, message] of advisoryPatterns) {
+    if (pattern.test(source)) diagnostics.push(warning(code, message));
   }
 
   const extensionReferences = new Set(source.match(/\bGL_(?:OES|EXT|WEBGL)_[A-Za-z0-9_]+\b/g) ?? []);
@@ -113,12 +120,6 @@ export function validateShader(source: string): Diagnostic[] {
     }
     if (!/\b\w+\.x\s*\*=\s*16(?:\.0)?\s*\/\s*9(?:\.0)?/.test(source)) {
       diagnostics.push(warning("aspect-ratio", "Aspect-sensitive shader does not visibly scale x by 16.0 / 9.0."));
-    }
-  }
-
-  if (uniforms.some((uniform) => uniform.name === "Opacity")) {
-    if (!/\bclamp\s*\(\s*Opacity\s*,\s*0(?:\.0)?\s*,\s*1(?:\.0)?\s*\)/.test(source)) {
-      diagnostics.push(warning("opacity-clamp", "Opacity has 0..1 bounds but is not visibly clamped to that range."));
     }
   }
 
