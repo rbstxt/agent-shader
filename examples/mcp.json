@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "agent-shader": {
+      "command": "node",
+      "args": ["/Users/dia/Projects/GitHub/agent-shader/dist/src/mcp.js"]
+    }
+  }
+}

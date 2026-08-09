@@ -1,0 +1,57 @@
+{
+  "name": "agent-shader",
+  "version": "0.1.0",
+  "description": "Build, validate, and render-test Panzoid WebGL 1 shader objects through a CLI and MCP server.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rbstxt/agent-shader.git"
+  },
+  "homepage": "https://github.com/rbstxt/agent-shader#readme",
+  "bugs": {
+    "url": "https://github.com/rbstxt/agent-shader/issues"
+  },
+  "keywords": [
+    "panzoid",
+    "shader",
+    "webgl",
+    "mcp",
+    "agent-skills"
+  ],
+  "type": "module",
+  "files": [
+    "dist/src"
+  ],
+  "bin": {
+    "agent-shader": "dist/src/cli.js",
+    "agent-shader-mcp": "dist/src/mcp.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json && node scripts/mark-bin-executable.mjs",
+    "check": "tsc -p tsconfig.json --noEmit",
+    "test": "npm run build && node --test dist/tests/*.test.js",
+    "test:unit": "npm run build && node --test dist/tests/builder.test.js dist/tests/validate.test.js",
+    "test:render": "npm run build && node --test dist/tests/render.test.js",
+    "install-browser": "playwright install chromium",
+    "cli": "tsx src/cli.ts",
+    "mcp": "tsx src/mcp.ts",
+    "prepack": "npm run build",
+    "prepublishOnly": "npm run check && npm run test:unit"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/server": "^2.0.0",
+    "playwright": "^1.60.0",
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "tsx": "^4.20.0",
+    "typescript": "^6.0.0"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

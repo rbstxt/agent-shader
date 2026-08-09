@@ -1,0 +1,4 @@
+interface:
+  display_name: "Panzoid Shader"
+  short_description: "Build and render-test Panzoid shader objects"
+  default_prompt: "Use $panzoid-shader to create, build, validate, and render-test a Panzoid shader object."
