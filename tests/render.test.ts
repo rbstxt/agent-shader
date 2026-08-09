@@ -27,6 +27,41 @@ test("verifies that defaults visibly demonstrate the effect", async () => {
   });
   assert.equal(report.passed, true);
   assert.equal(report.defaultEffectCheck?.passed, true);
+  assert.deepEqual(report.inputRenders?.map((item) => item.name), [
+    "xy-grid",
+    "opaque-black",
+    "transparent-black",
+    "semi-transparent-color",
+  ]);
+  for (const input of report.inputRenders ?? []) {
+    assert.ok(input.render.outputPath);
+    assert.ok(input.render.rgbOnlyOutputPath);
+    assert.ok((await stat(input.render.outputPath!)).size > 100);
+    assert.ok((await stat(input.render.rgbOnlyOutputPath!)).size > 100);
+  }
+  assert.equal(report.premultipliedAlphaCheck?.passed, true);
+  assert.equal(report.premultipliedAlphaCheck?.hiddenRgbPixels, 0);
+  assert.equal(report.premultipliedAlphaCheck?.rgbExceedsAlphaPixels, 0);
+  assert.equal(report.opacityZeroCheck?.applicable, true);
+  assert.equal(report.opacityZeroCheck?.passed, true);
+});
+
+test("renders every Progress checkpoint with premultiplied output", async () => {
+  const source = await readFile(resolve("fixtures/progress.glsl"), "utf8");
+  const config = JSON.parse(await readFile(resolve("fixtures/progress.config.json"), "utf8"));
+  const report = await testShader(source, config, {
+    width: 160,
+    height: 90,
+    outputDirectory: join(process.cwd(), ".test-output", "progress-report"),
+  });
+  assert.equal(report.passed, true);
+  assert.deepEqual(report.progressRenders?.map((item) => item.progress), [0, 0.1, 0.35, 0.65, 0.9, 1]);
+  for (const checkpoint of report.progressRenders ?? []) {
+    assert.equal(checkpoint.render.pixelSummary.hiddenRgbPixels, 0);
+    assert.equal(checkpoint.render.pixelSummary.rgbExceedsAlphaPixels, 0);
+    assert.ok(checkpoint.render.outputPath);
+    assert.ok(checkpoint.render.rgbOnlyOutputPath);
+  }
 });
 
 test("renders a custom sampler2D with the bundled landscape", async () => {

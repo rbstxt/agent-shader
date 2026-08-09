@@ -9,7 +9,7 @@ import { buildShaderObject } from "./panzoid.js";
 import { renderShader } from "./renderer.js";
 import { testShader } from "./tester.js";
 import { validateShader } from "./validate.js";
-import type { TexturePaths, UniformValues } from "./types.js";
+import type { RgbaColor, TexturePaths, UniformValues } from "./types.js";
 
 interface ParsedArguments {
   command?: string;
@@ -40,7 +40,7 @@ function usage(): string {
     "agent-shader install-browser",
     "agent-shader build <shader.glsl> --out <shader.json> [--config <config.json>] [--textures <textures.json>]",
     "agent-shader validate <shader.glsl>",
-    "agent-shader render <shader.glsl> --out <render.png> [--values <values.json>] [--textures <textures.json>] [--input <image>]",
+    "agent-shader render <shader.glsl> --out <render.png> [--rgb-only <diagnostic.png>] [--values <values.json>] [--textures <textures.json>] [--input <image> | --input-color r,g,b,a]",
     "agent-shader test <shader.glsl> --out-dir <directory> [--config <config.json>] [--textures <textures.json>]",
   ].join("\n");
 }
@@ -66,6 +66,15 @@ function parseUvScale(value?: string): [number, number] | undefined {
     throw new Error("--uv-scale must be two comma-separated numbers.");
   }
   return [parts[0], parts[1]];
+}
+
+function parseInputColor(value?: string): RgbaColor | undefined {
+  if (!value) return undefined;
+  const parts = value.split(",").map(Number);
+  if (parts.length !== 4 || parts.some((item) => !Number.isFinite(item))) {
+    throw new Error("--input-color must be four comma-separated numbers.");
+  }
+  return [parts[0], parts[1], parts[2], parts[3]];
 }
 
 async function loadValues(path?: string): Promise<UniformValues | undefined> {
@@ -125,6 +134,8 @@ async function main(): Promise<void> {
   const values = await loadValues(parsed.options.values);
   const texturePaths = await loadTextures(parsed.options.textures);
   const uvScale = parseUvScale(parsed.options["uv-scale"]);
+  const inputColor = parseInputColor(parsed.options["input-color"]);
+  if (parsed.options.input && inputColor) throw new Error("Use either --input or --input-color, not both.");
 
   if (parsed.command === "validate") {
     const diagnostics = validateShader(source);
@@ -165,7 +176,9 @@ async function main(): Promise<void> {
     if (!parsed.options.out) throw new Error("render requires --out.");
     const result = await renderShader(source, config, {
       outputPath: parsed.options.out,
+      rgbOnlyOutputPath: parsed.options["rgb-only"],
       inputImagePath: parsed.options.input,
+      inputColor,
       width,
       height,
       values,

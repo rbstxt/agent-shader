@@ -31,6 +31,20 @@ test("does not require a visible Opacity clamp", async () => {
   assert.equal(validateShader(unclamped).some((item) => item.code === "opacity-clamp"), false);
 });
 
+test("rejects alpha unpremultiplication and unpremultiplied source output", async () => {
+  const source = await readFile(resolve("fixtures/circle.glsl"), "utf8");
+  const divided = source.replace(
+    "gl_FragColor = vec4(outputColor, outputAlpha);",
+    "outputColor = outputColor / outputAlpha;\n  gl_FragColor = vec4(outputColor, outputAlpha);",
+  );
+  const direct = source.replace(
+    "gl_FragColor = vec4(outputColor, outputAlpha);",
+    "gl_FragColor = vec4(sourceColor, sourceAlpha);",
+  );
+  assert.ok(validateShader(divided).some((item) => item.code === "alpha-unpremultiply"));
+  assert.ok(validateShader(direct).some((item) => item.code === "unpremultiplied-source"));
+});
+
 test("accepts the supported preprocessor and derivative extension", async () => {
   const source = await readFile(resolve("fixtures/derivatives.glsl"), "utf8");
   assert.equal(validateShader(source).filter((item) => item.severity === "error").length, 0);

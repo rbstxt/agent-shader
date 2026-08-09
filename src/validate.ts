@@ -39,6 +39,8 @@ export function validateShader(source: string): Diagnostic[] {
     ["discard", /\bdiscard\b/, "discard is forbidden because it can make Panzoid Shader Object output black."],
     ["import-syntax", /\bimport\b/, "GLSL ES 1.00 has no standard import syntax."],
     ["unsupported-extension-symbol", /\b(?:texture2DLodEXT|texture2DGradEXT|gl_FragDepthEXT|gl_FragData)\b/, "Unsupported WebGL 1 extension symbol detected."],
+    ["alpha-unpremultiply", /\/\s*(?:outputAlpha|gl_FragColor\.a)\b/, "Do not divide output RGB by output alpha; Panzoid Shader output must remain premultiplied."],
+    ["unpremultiplied-source", /\bvec4\s*\(\s*sourceColor\s*,\s*sourceAlpha\s*\)/, "Multiply sourceColor by sourceAlpha before writing premultiplied output."],
   ];
 
   for (const [code, pattern, message] of forbiddenPatterns) {

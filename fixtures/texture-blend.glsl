@@ -11,9 +11,11 @@ void main()
   vec4 texel = texture2D(tDiffuse, vUvScaled);
   vec4 source = texture2D(Landscape, vUvScaled);
   float sourceAlpha = source.a * clamp(MixAmount, 0.0, 1.0);
-  float outputAlpha = sourceAlpha + texel.a * (1.0 - sourceAlpha);
-  vec3 outputPremultiplied = source.rgb * sourceAlpha + texel.rgb * texel.a * (1.0 - sourceAlpha);
-  vec3 outputColor = outputAlpha > 0.0 ? outputPremultiplied / outputAlpha : vec3(0.0);
+  vec3 sourceColor = source.rgb;
+  float backgroundAlpha = clamp(texel.a, 0.0, 1.0);
+  float remainingBackground = backgroundAlpha * (1.0 - sourceAlpha);
+  float outputAlpha = sourceAlpha + remainingBackground;
+  vec3 outputColor = sourceColor * sourceAlpha + texel.rgb * remainingBackground;
 
   gl_FragColor = vec4(outputColor, outputAlpha);
 }

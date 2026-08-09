@@ -1,6 +1,6 @@
 {
   "name": "agent-shader",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "Build, validate, and render-test Panzoid WebGL 1 shader objects through a CLI and MCP server.",
   "license": "MIT",
   "repository": {

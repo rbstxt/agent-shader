@@ -11,7 +11,7 @@ This repository contains three independently installable pieces:
 - `agent-shader` MCP server: the same capabilities exposed as local MCP tools
 - `panzoid-shader`: a portable Agent Skill for generating shaders that follow the Panzoid conventions
 
-The core model is intentionally static. Generated Panzoid parameters use `animated: false` and one value at frame zero; animation and keyframe inputs are not accepted. A build writes JSON only after validation, Chromium WebGL 1 compilation and rendering, and a visible-default check pass.
+The core model is intentionally static. Generated Panzoid parameters use `animated: false` and one value at frame zero; animation and keyframe inputs are not accepted. A build writes JSON only after validation, Chromium WebGL 1 compilation and rendering, four-background premultiplied-alpha checks, RGB-only diagnostics, and a visible-default check pass.
 
 ## Requirements
 
@@ -97,7 +97,7 @@ Standard parameters are inferred without configuration:
 | `Rotation` | `float` | `0` | omitted |
 | `Scale` | `vec2` | `[1, 1]` | omitted |
 
-The test command renders the default image and verifies that it differs visibly from the unmodified input. The agent must also inspect the output PNG before handing off the JSON.
+The test command renders the default X-Y grid, opaque black, transparent black, and a semi-transparent color. Every render also gets an RGB-only diagnostic PNG that exposes RGB hidden behind alpha. It checks premultiplied-alpha invariants and verifies that the default differs visibly from the unmodified input. If the shader declares `Progress`, it additionally renders `0.00`, `0.10`, `0.35`, `0.65`, `0.90`, and `1.00`. The agent must inspect every applicable normal and RGB-only PNG before handing off the JSON.
 
 `min` and `max` are authoring decisions, not automated render tests. Do not add them merely to describe an intended, conventional, or useful range. Set a bound only when changing the value farther beyond that point produces no additional visual change; otherwise omit it. `Opacity` uses `0..1` because generated shaders clamp it and values outside that range therefore cannot change the result.
 
@@ -137,6 +137,20 @@ agent-shader test fixtures/texture-blend.glsl \
 ### Rendering
 
 Rendering launches Chromium through Playwright and requests a WebGL 1 context with antialiasing disabled. It uses the Panzoid `common.glsl` contract, a 16:9 canvas by default, `uvScale = [1, 1]`, and a deterministic Python-generated X-Y grid as `tDiffuse`. Extra image samplers use the bundled CC0 landscape unless overridden with `--textures` or MCP `texturePaths`. See `samples/ATTRIBUTION.md` for provenance.
+
+Shader output uses premultiplied-alpha source-over. Do not divide RGB by the resulting alpha:
+
+```glsl
+float sourceAlpha = mask * clamp(Opacity, 0.0, 1.0);
+vec4 texel = texture2D(tDiffuse, vUvScaled);
+float backgroundAlpha = clamp(texel.a, 0.0, 1.0);
+float remainingBackground = backgroundAlpha * (1.0 - sourceAlpha);
+float outputAlpha = sourceAlpha + remainingBackground;
+vec3 outputColor = sourceColor * sourceAlpha + texel.rgb * remainingBackground;
+gl_FragColor = vec4(outputColor, outputAlpha);
+```
+
+On `vec4(0.0)` input this reduces to `vec4(sourceColor * sourceAlpha, sourceAlpha)`. The validator rejects division by `outputAlpha` and direct `vec4(sourceColor, sourceAlpha)` output. Tests require zero hidden RGB at alpha zero, RGB attenuation with alpha, `Opacity = 0` input preservation, and normally `R <= A`, `G <= A`, and `B <= A` for colors in `0..1`.
 
 ### GLSL ES 1.00 compatibility
 
@@ -257,7 +271,7 @@ The MCP server exposes:
 - `render_shader`
 - `test_shader`
 
-`build_shader_object` returns JSON only after its complete verification pass and includes the default preview PNG so the agent can inspect the exact generated defaults.
+`build_shader_object` returns JSON only after its complete automated verification pass and includes all normal and RGB-only previews so the agent can inspect the four required inputs and every applicable `Progress` checkpoint.
 
 Rendering tools require the one-time browser installation:
 
@@ -553,7 +567,7 @@ Ask the agent:
 Use agent-shader to validate and render-test fixtures/circle.glsl, then show the render and summarize any diagnostics.
 ```
 
-The agent should call `validate_shader` or `test_shader`; render tools should return a PNG in addition to their JSON report.
+The agent should call `test_shader`; it should return all normal and RGB-only PNGs in addition to the JSON report.
 
 ## Development
 

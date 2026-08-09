@@ -58,7 +58,9 @@ export async function renderShader(
       .map((parameter) => [parameter.name, parameter.default as ScalarOrVector]),
   );
   const values = { ...defaults, ...(options.values ?? {}) };
-  const inputDataUrl = await imageDataUrl(options.inputImagePath) ?? await bundledSampleDataUrl("xy-grid.png");
+  const inputDataUrl = options.inputColor
+    ? undefined
+    : await imageDataUrl(options.inputImagePath) ?? await bundledSampleDataUrl("xy-grid.png");
   const defaultTextureDataUrl = await bundledSampleDataUrl("landscape.jpg") ?? inputDataUrl;
   const textureDataUrls: Record<string, string | undefined> = {};
   for (const parameter of inferred.parameters) {
@@ -76,7 +78,7 @@ export async function renderShader(
     const page = await browser.newPage({ viewport: { width, height }, deviceScaleFactor: 1 });
     await page.setContent(`<canvas id="shader" width="${width}" height="${height}"></canvas>`);
     const pixelSummary = await page.evaluate(
-      async ({ fragmentSource, width, height, uvScale, uniforms, declarations, inputDataUrl, textureDataUrls, background }) => {
+      async ({ fragmentSource, width, height, uvScale, uniforms, declarations, inputDataUrl, inputColor, textureDataUrls, background }) => {
         const canvas = document.getElementById("shader") as HTMLCanvasElement;
         const gl = canvas.getContext("webgl", {
           alpha: true,
@@ -172,7 +174,7 @@ void main()
         gl.uniformMatrix4fv(gl.getUniformLocation(program, "modelViewMatrix"), false, identity);
         gl.uniform2f(gl.getUniformLocation(program, "uvScale"), uvScale[0], uvScale[1]);
 
-        const bindTexture = async (unit: number, dataUrl?: string) => {
+        const bindTexture = async (unit: number, dataUrl?: string, solidColor?: [number, number, number, number]) => {
           const texture = gl.createTexture();
           gl.activeTexture(gl.TEXTURE0 + unit);
           gl.bindTexture(gl.TEXTURE_2D, texture);
@@ -181,7 +183,10 @@ void main()
           gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
           gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
           gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, 1);
-          if (dataUrl) {
+          if (solidColor) {
+            const pixel = new Uint8Array(solidColor.map((value) => Math.round(Math.min(1, Math.max(0, value)) * 255)));
+            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, pixel);
+          } else if (dataUrl) {
             const image = await new Promise<HTMLImageElement>((resolveImage, rejectImage) => {
               const item = new Image();
               item.onload = () => resolveImage(item);
@@ -206,7 +211,7 @@ void main()
           }
         };
 
-        await bindTexture(0, inputDataUrl);
+        await bindTexture(0, inputDataUrl, inputColor);
         gl.uniform1i(gl.getUniformLocation(program, "tDiffuse"), 0);
 
         let textureUnit = 1;
@@ -244,6 +249,10 @@ void main()
         const minimum = [255, 255, 255, 255];
         const maximum = [0, 0, 0, 0];
         let nonTransparentPixels = 0;
+        let transparentPixels = 0;
+        let hiddenRgbPixels = 0;
+        let rgbExceedsAlphaPixels = 0;
+        let maxRgbAtZeroAlpha = 0;
         for (let index = 0; index < pixels.length; index += 4) {
           for (let channel = 0; channel < 4; channel += 1) {
             const value = pixels[index + channel];
@@ -251,7 +260,15 @@ void main()
             minimum[channel] = Math.min(minimum[channel], value);
             maximum[channel] = Math.max(maximum[channel], value);
           }
-          if (pixels[index + 3] > 0) nonTransparentPixels += 1;
+          const alpha = pixels[index + 3];
+          const maxRgb = Math.max(pixels[index], pixels[index + 1], pixels[index + 2]);
+          if (alpha > 0) nonTransparentPixels += 1;
+          if (alpha === 0) {
+            transparentPixels += 1;
+            maxRgbAtZeroAlpha = Math.max(maxRgbAtZeroAlpha, maxRgb);
+            if (maxRgb > 0) hiddenRgbPixels += 1;
+          }
+          if (maxRgb > alpha + 1) rgbExceedsAlphaPixels += 1;
         }
         let hashA = 2166136261;
         let hashB = 2654435761;
@@ -260,6 +277,26 @@ void main()
           hashB = Math.imul(hashB ^ value, 3266489917) >>> 0;
         }
         const hash = `${hashA.toString(16).padStart(8, "0")}${hashB.toString(16).padStart(8, "0")}`;
+        const diagnosticCanvas = document.createElement("canvas");
+        diagnosticCanvas.id = "rgb-diagnostic";
+        diagnosticCanvas.width = width;
+        diagnosticCanvas.height = height;
+        const diagnosticContext = diagnosticCanvas.getContext("2d");
+        if (!diagnosticContext) throw new Error("Unable to create RGB diagnostic canvas.");
+        const diagnosticImage = diagnosticContext.createImageData(width, height);
+        for (let y = 0; y < height; y += 1) {
+          const targetY = height - 1 - y;
+          for (let x = 0; x < width; x += 1) {
+            const sourceOffset = (y * width + x) * 4;
+            const targetOffset = (targetY * width + x) * 4;
+            diagnosticImage.data[targetOffset] = pixels[sourceOffset];
+            diagnosticImage.data[targetOffset + 1] = pixels[sourceOffset + 1];
+            diagnosticImage.data[targetOffset + 2] = pixels[sourceOffset + 2];
+            diagnosticImage.data[targetOffset + 3] = 255;
+          }
+        }
+        diagnosticContext.putImageData(diagnosticImage, 0, 0);
+        document.body.appendChild(diagnosticCanvas);
         const pixelCount = width * height;
         return {
           hash,
@@ -267,6 +304,10 @@ void main()
           minimum: minimum as [number, number, number, number],
           maximum: maximum as [number, number, number, number],
           nonTransparentPixels,
+          transparentPixels,
+          hiddenRgbPixels,
+          rgbExceedsAlphaPixels,
+          maxRgbAtZeroAlpha,
         };
       },
       {
@@ -277,6 +318,7 @@ void main()
         uniforms: values as Record<string, ScalarOrVector>,
         declarations: inferred.parameters.map(({ name, type }) => ({ name, type })),
         inputDataUrl,
+        inputColor: options.inputColor,
         textureDataUrls,
         background: options.background ?? "checker",
       },
@@ -289,7 +331,14 @@ void main()
       await page.locator("#shader").screenshot({ path: outputPath, type: "png" });
     }
 
-    return { width, height, outputPath, pixelSummary };
+    let rgbOnlyOutputPath: string | undefined;
+    if (options.rgbOnlyOutputPath) {
+      rgbOnlyOutputPath = resolve(options.rgbOnlyOutputPath);
+      await mkdir(dirname(rgbOnlyOutputPath), { recursive: true });
+      await page.locator("#rgb-diagnostic").screenshot({ path: rgbOnlyOutputPath, type: "png" });
+    }
+
+    return { width, height, outputPath, rgbOnlyOutputPath, pixelSummary };
   } finally {
     await browser.close();
   }

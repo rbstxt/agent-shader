@@ -1,6 +1,6 @@
 ---
 name: panzoid-shader
-description: Create, validate, build, and render-test Panzoid WebGL 1 / GLSL ES 1.00 fragment shaders and verified Shader Object JSON. Use for Panzoid shader effects, .glsl files, supported preprocessor syntax, GL_OES_standard_derivatives, sampler2D image properties, customProperties generation, static illustrative defaults and bounds, visual regression checks, or tasks requiring Color, Opacity, Position, Rotation, Scale, vUvScaled, 16:9 coordinates, and source-over composition.
+description: Create, validate, build, and render-test Panzoid WebGL 1 / GLSL ES 1.00 fragment shaders and verified Shader Object JSON. Use for Panzoid shader effects, .glsl files, supported preprocessor syntax, GL_OES_standard_derivatives, sampler2D image properties, customProperties generation, static illustrative defaults and bounds, premultiplied-alpha diagnostics, visual regression checks, or tasks requiring Color, Opacity, Position, Rotation, Scale, vUvScaled, 16:9 coordinates, and source-over composition.
 ---
 
 # Panzoid Shader
@@ -12,10 +12,10 @@ Use the repository CLI or MCP tools to produce a complete, tested Panzoid Shader
 1. Start from `assets/base.glsl` or inspect `assets/circle.glsl`.
 2. Write the fragment shader with the contract below.
 3. Choose explicit defaults that make every nonstandard parameter's behavior immediately visible.
-4. Run `agent-shader test <shader.glsl> --out-dir <directory>` and inspect the PNG and report.
-5. Fix the shader or defaults until the report passes and the default PNG clearly demonstrates the effect.
+4. Run `agent-shader test <shader.glsl> --out-dir <directory>` and inspect every normal and RGB-only PNG plus the report.
+5. Fix the shader or defaults until the report passes, the defaults clearly demonstrate the effect, and the alpha diagnostics are visually clean.
 6. Run `agent-shader build <shader.glsl> --out <shader.json>`. Build performs the full test again and writes JSON only on success.
-7. Prefer the equivalent MCP tools when available. Return JSON as complete only when `verified` and `report.passed` are both true.
+7. Prefer the equivalent MCP tools when available. Return the Shader Object JSON as complete only after `agent-shader test` passes and `agent-shader build` succeeds.
 
 ## Shader contract
 
@@ -27,10 +27,41 @@ Use the repository CLI or MCP tools to produce a complete, tested Panzoid Shader
 - Express `Rotation` in clockwise degrees.
 - Treat `Scale` as a `vec2` multiplier with `[1, 1]` as the default.
 - Sample the source with `texture2D(tDiffuse, vUvScaled)` unless intentional distortion requires modified UVs.
-- Composite drawn pixels over the original texel with straight-alpha source-over.
+- Composite drawn pixels over `tDiffuse` using source-over and output premultiplied-alpha. Do not divide the resulting RGB by the output alpha.
 - Do not add anti-aliasing unless the user explicitly asks for it. This is an agent decision, not a validator rule.
 - Omit shader comments by default. Include them when the user explicitly requests them or they are materially useful for the requested delivery.
 - Assign the result to `gl_FragColor`.
+
+Use this source-over form:
+
+```glsl
+float sourceAlpha = mask * clamp(Opacity, 0.0, 1.0);
+vec4 texel = texture2D(tDiffuse, vUvScaled);
+
+float backgroundAlpha = clamp(texel.a, 0.0, 1.0);
+float remainingBackground = backgroundAlpha * (1.0 - sourceAlpha);
+
+float outputAlpha =
+    sourceAlpha +
+    remainingBackground;
+
+vec3 outputColor =
+    sourceColor * sourceAlpha +
+    texel.rgb * remainingBackground;
+
+gl_FragColor = vec4(outputColor, outputAlpha);
+```
+
+Never divide premultiplied RGB by `outputAlpha`. Never output `vec4(sourceColor, sourceAlpha)`. When `tDiffuse` is `vec4(0.0)`, the result must be equivalent to:
+
+```glsl
+gl_FragColor = vec4(
+    sourceColor * sourceAlpha,
+    sourceAlpha
+);
+```
+
+Fully transparent and low-alpha pixels must not retain unattenuated source RGB. Keep emitted color intensity bounded separately from density. Prefer `vec3 sourceColor = Color * clamp(brightness, 0.0, 1.0);`; do not add an unbounded Glow term directly to RGB. Drive Glow density through alpha or another separately clamped factor.
 
 ## GLSL ES 1.00 compatibility
 
@@ -71,4 +102,10 @@ Use the bundled X-Y grid as `tDiffuse` when testing coordinate warps and distort
 
 ## Verification
 
-Require zero validation errors, successful WebGL 1 compilation and linking, a generated and visually inspected PNG, and a visible difference from the input at defaults. Never hand off an unverified Shader Object JSON as complete. Do not run automated min/max rendering tests; apply the parameter-contract criterion when deciding whether each bound belongs in the JSON.
+Every shader test must render the default X-Y grid, opaque black `vec4(0, 0, 0, 1)`, transparent black `vec4(0, 0, 0, 0)`, and semi-transparent color `vec4(0.2, 0.5, 0.8, 0.25)`. Inspect both the normal PNG and the RGB-only diagnostic for every input. The RGB-only image ignores output alpha so hidden RGB remains visible.
+
+On transparent input, require `vec4(0.0)` outside the effect, zero RGB wherever alpha is zero, RGB attenuation as alpha decreases, exact input preservation at `Opacity = 0`, and no bright hidden RGB. When `Color` is within `0..1`, each output RGB component should normally be no greater than output alpha.
+
+When a `Progress` float exists, test and inspect `0.00`, `0.10`, `0.35`, `0.65`, `0.90`, and `1.00`. Check that the center is not accidentally filled at the start, the representative form appears mid-animation, radius or displacement changes naturally, density and Glow decay near the end, and no hidden RGB remains at completion.
+
+Require zero GLSL validation errors, successful WebGL 1 compilation and linking, successful display on all four inputs, passing premultiplied-alpha numerical checks, clean RGB-only diagnostics, visual inspection of all Progress checkpoints when applicable, a clearly demonstrative default, and a successful build. Never hand off a Shader Object JSON as complete before both `agent-shader test` and `agent-shader build` succeed. Do not run automated min/max rendering tests; apply the parameter-contract criterion when deciding whether each bound belongs in the JSON.
