@@ -3,6 +3,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { resolve } from "node:path";
 import { buildShaderObject } from "../src/panzoid.js";
+import { inferShaderName, withInferredShaderName } from "../src/naming.js";
 
 test("builds the static Panzoid Shader Object shape", async () => {
   const source = await readFile(resolve("fixtures/circle.glsl"), "utf8");
@@ -11,7 +12,7 @@ test("builds the static Panzoid Shader Object shape", async () => {
   const root = result.shaderObject[0] as Record<string, unknown>;
   const data = (root.data as Array<Record<string, unknown>>)[0];
   const properties = data.properties as Record<string, unknown>;
-  assert.equal(properties.name, "Shader");
+  assert.equal(properties.name, "Effect");
   assert.equal(properties.fragShader, source);
   const customProperties = data.customProperties as Array<Record<string, unknown>>;
   assert.deepEqual(
@@ -36,6 +37,15 @@ test("builds the static Panzoid Shader Object shape", async () => {
   assert.deepEqual((customProperties[4].objects as Array<Record<string, unknown>>)[0].keyframes, [
     { value: 1, frame: 0, tween: 1, controlPoints: [[-10, 0], [10, 0]] },
   ]);
+});
+
+test("infers short shader names from filenames and preserves explicit names", () => {
+  assert.equal(inferShaderName("/tmp/glowing-ring.glsl"), "Glowing Ring");
+  assert.equal(inferShaderName("/tmp/ShockwaveShader.frag"), "Shockwave");
+  assert.equal(inferShaderName("/tmp/xy-warp.config.json"), "XY Warp");
+  assert.equal(inferShaderName("/tmp/shader.glsl"), "Effect");
+  assert.equal(withInferredShaderName({}, "/tmp/circle.glsl").name, "Circle");
+  assert.equal(withInferredShaderName({ name: "Soft Ring" }, "/tmp/circle.glsl").name, "Soft Ring");
 });
 
 test("serializes sampler2D properties with the exact uniform name", async () => {

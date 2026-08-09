@@ -1,4 +1,5 @@
 export { buildShaderObject } from "./panzoid.js";
+export { inferShaderName, withInferredShaderName } from "./naming.js";
 export { renderShader } from "./renderer.js";
 export { testShader } from "./tester.js";
 export { validateShader } from "./validate.js";

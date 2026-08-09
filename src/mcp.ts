@@ -6,6 +6,7 @@ import { McpServer } from "@modelcontextprotocol/server";
 import { serveStdio } from "@modelcontextprotocol/server/stdio";
 import { z } from "zod";
 import { loadShaderConfig } from "./config.js";
+import { withInferredShaderName } from "./naming.js";
 import { buildShaderObject } from "./panzoid.js";
 import { renderShader } from "./renderer.js";
 import { testShader } from "./tester.js";
@@ -119,7 +120,7 @@ function createServer(): McpServer {
     },
     async ({ shaderPath, shaderSource, configPath, outputPath, inputImagePath, inputColor, texturePaths, width, height, uvScale, alphaChecker }) => {
       const source = await loadSource(shaderPath, shaderSource);
-      const config = await loadShaderConfig(configPath);
+      const config = withInferredShaderName(await loadShaderConfig(configPath), shaderPath, configPath);
       const result = buildShaderObject(source, config);
       if (result.diagnostics.some((item) => item.severity === "error")) {
         return textResult({ built: false, verified: false, parameters: result.parameters, diagnostics: result.diagnostics });
@@ -164,7 +165,7 @@ function createServer(): McpServer {
     },
     async ({ shaderPath, shaderSource, configPath, outputPath, inputImagePath, inputColor, texturePaths, width, height, uvScale, values, alphaChecker }) => {
       const source = await loadSource(shaderPath, shaderSource);
-      const config = await loadShaderConfig(configPath);
+      const config = withInferredShaderName(await loadShaderConfig(configPath), shaderPath, configPath);
       let renderPath = outputPath;
       if (!renderPath) {
         const directory = await mkdtemp(join(tmpdir(), "agent-shader-"));
@@ -204,7 +205,7 @@ function createServer(): McpServer {
     },
     async ({ shaderPath, shaderSource, configPath, outputDirectory, inputImagePath, inputColor, texturePaths, width, height, uvScale, values, alphaChecker }) => {
       const source = await loadSource(shaderPath, shaderSource);
-      const config = await loadShaderConfig(configPath);
+      const config = withInferredShaderName(await loadShaderConfig(configPath), shaderPath, configPath);
       const directory = outputDirectory ?? await mkdtemp(join(tmpdir(), "agent-shader-test-"));
       const report = await testShader(source, config, {
         outputDirectory: directory,

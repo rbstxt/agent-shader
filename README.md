@@ -1,5 +1,7 @@
 # agent-shader
 
+[English](README.md) | [日本語](README.ja.md)
+
 [![npm version](https://img.shields.io/npm/v/agent-shader.svg)](https://www.npmjs.com/package/agent-shader)
 [![license](https://img.shields.io/npm/l/agent-shader.svg)](./LICENSE)
 
@@ -76,7 +78,7 @@ Every nonstandard numeric uniform requires an explicit default chosen to demonst
 
 ```json
 {
-  "name": "Shader",
+  "name": "Soft Circle",
   "parameters": {
     "Radius": {
       "default": 0.25
@@ -100,6 +102,10 @@ Standard parameters are inferred without configuration:
 The test command renders the default X-Y grid, opaque black, transparent black, and a semi-transparent color. Every render also gets an RGB-only diagnostic PNG that exposes RGB hidden behind alpha. It checks premultiplied-alpha invariants and verifies that the default differs visibly from the unmodified input. If the shader declares `Progress`, it additionally renders `0.00`, `0.10`, `0.35`, `0.65`, `0.90`, and `1.00`. The agent must inspect every applicable normal and RGB-only PNG before handing off the JSON.
 
 `min` and `max` are authoring decisions, not automated render tests. Do not add them merely to describe an intended, conventional, or useful range. Set a bound only when changing the value farther beyond that point produces no additional visual change; otherwise omit it. `Opacity` uses `0..1` because generated shaders clamp it and values outside that range therefore cannot change the result.
+
+There is one intentional exception: set `min` to `0` for a magnitude-only parameter when negative values merely reverse or mirror the same size behavior instead of providing a meaningfully distinct control. The standard `Position`, `Rotation`, `Scale`, and color parameters remain unbounded.
+
+Shader Object names are short and effect-specific. When config `name` is omitted, the CLI and MCP infer one from the shader filename, such as `glowing-ring.glsl` → `Glowing Ring`. An explicit config name always wins; a generic filename falls back to `Effect` rather than `Shader`.
 
 ### Image uniforms
 

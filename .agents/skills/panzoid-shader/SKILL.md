@@ -89,12 +89,13 @@ Fully transparent and low-alpha pixels must not retain unattenuated source RGB. 
 - Omit `min` and `max` by default.
 - Decide whether to set `min` or `max` while authoring the JSON. Do not add bounds merely because a range seems valid, useful, safe, conventional, or intended.
 - Set a bound only at the point beyond which changing the value further produces no additional visual change. Omit it whenever that is uncertain or interesting behavior remains possible.
+- As a deliberate exception, set `min` to `0` for a magnitude-only parameter when negative values merely reverse or mirror the same size behavior and do not provide a meaningfully distinct control.
 - Set `Opacity` to `0..1` because the shader must clamp it to that range.
 - Do not bound `Position`, `Rotation`, `Scale`, or colors.
 
 ## Panzoid JSON
 
-Infer standard defaults from uniform names. Use a small JSON config only for nonstandard defaults or explicitly justified bounds. Serialize static values exactly as Panzoid expects: `animated: false` with one value at frame zero. Do not expose animation or keyframes in the input model.
+Infer standard defaults from uniform names. Give every Shader Object a short, simple, effect-specific name. The CLI and MCP infer it from the shader filename when config `name` is omitted; provide `name` explicitly when the inferred filename is generic or unclear. Never leave the object named only `Shader`. Use a small JSON config only for nonstandard defaults or explicitly justified bounds. Serialize static values exactly as Panzoid expects: `animated: false` with one value at frame zero. Do not expose animation or keyframes in the input model.
 
 For each extra `uniform sampler2D Name;`, create one image custom property with `type: 8`, `assetType: 0`, `accept: "image/*"`, and `properties.name` exactly equal to `Name`. Never rename the uniform in JSON. Use `--textures` or the MCP `texturePaths` map to supply explicit preview images.
 

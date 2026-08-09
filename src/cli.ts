@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { spawn } from "node:child_process";
 import { createRequire } from "node:module";
 import { loadShaderConfig } from "./config.js";
+import { withInferredShaderName } from "./naming.js";
 import { buildShaderObject } from "./panzoid.js";
 import { renderShader } from "./renderer.js";
 import { testShader } from "./tester.js";
@@ -128,7 +129,11 @@ async function main(): Promise<void> {
   }
 
   const source = await readFile(shaderPath, "utf8");
-  const config = await loadShaderConfig(parsed.options.config);
+  const config = withInferredShaderName(
+    await loadShaderConfig(parsed.options.config),
+    shaderPath,
+    parsed.options.config,
+  );
   const width = parsed.options.width ? Number(parsed.options.width) : undefined;
   const height = parsed.options.height ? Number(parsed.options.height) : undefined;
   const values = await loadValues(parsed.options.values);

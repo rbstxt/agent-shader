@@ -118,7 +118,7 @@ export function buildShaderObject(source: string, config: ShaderConfig = {}): Bu
         {
           type: 1,
           properties: {
-            name: config.name ?? "Shader",
+            name: config.name ?? "Effect",
             enabled: staticAnimatedValue(1, 0),
             fragShader: source,
           },
