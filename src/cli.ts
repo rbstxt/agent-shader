@@ -168,12 +168,12 @@ async function main(): Promise<void> {
       background: parsed.options.background === "alpha-checker" ? "alpha-checker" : "checker",
     });
     if (!report.passed) {
-      process.stdout.write(`${JSON.stringify({ built: false, verified: false, diagnostics: result.diagnostics, report }, null, 2)}\n`);
+      process.stdout.write(`${JSON.stringify({ built: false, verified: false, diagnostics: report.diagnostics, report }, null, 2)}\n`);
       process.exitCode = 1;
       return;
     }
     await writeJson(parsed.options.out, result.shaderObject);
-    process.stdout.write(`${JSON.stringify({ built: true, verified: true, outputPath: resolve(parsed.options.out), parameters: result.parameters, diagnostics: result.diagnostics, report }, null, 2)}\n`);
+    process.stdout.write(`${JSON.stringify({ built: true, verified: true, outputPath: resolve(parsed.options.out), parameters: result.parameters, diagnostics: report.diagnostics, report }, null, 2)}\n`);
     return;
   }
 

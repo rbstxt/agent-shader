@@ -11,9 +11,9 @@ Use the repository CLI or MCP tools to produce a complete, tested Panzoid Shader
 
 1. Start from `assets/base.glsl` or inspect `assets/circle.glsl`.
 2. Write the fragment shader with the contract below.
-3. Choose explicit defaults that make every nonstandard parameter's behavior immediately visible.
+3. Choose explicit defaults that usually make every nonstandard parameter's behavior easy to understand. An unchanged default is acceptable when it is intentional and appropriate for the effect.
 4. Run `agent-shader test <shader.glsl> --out-dir <directory>` and inspect every normal and RGB-only PNG plus the report.
-5. Fix the shader or defaults until the report passes, the defaults clearly demonstrate the effect, and the alpha diagnostics are visually clean.
+5. Fix the shader or defaults until the report passes and the alpha diagnostics are visually clean. If `default-no-visible-change` appears, either choose a clearer default or confirm that the unchanged default is appropriate.
 6. Run `agent-shader build <shader.glsl> --out <shader.json>`. Build performs the full test again and writes JSON only on success.
 7. Prefer the equivalent MCP tools when available. Return the Shader Object JSON as complete only after `agent-shader test` passes and `agent-shader build` succeeds.
 
@@ -84,8 +84,8 @@ Fully transparent and low-alpha pixels must not retain unattenuated source RGB. 
 - Use PascalCase for other parameters.
 - Never prefix parameters with `u`.
 - Keep parameters static. Do not accept animation or keyframe input.
-- Give every nonstandard numeric uniform an explicit config default. Choose the value for clarity, not merely convenience.
-- Override a standard default when it would hide or poorly demonstrate this particular effect.
+- Give every nonstandard numeric uniform an explicit config default. Prefer clarity, but allow a no-change value when it is the most appropriate default.
+- Override a standard default when it would unintentionally hide or poorly demonstrate this particular effect. Keep a no-change standard default when that behavior is intentional and appropriate.
 - Omit `min` and `max` by default.
 - Decide whether to set `min` or `max` while authoring the JSON. Do not add bounds merely because a range seems valid, useful, safe, conventional, or intended.
 - Set a bound only at the point beyond which changing the value further produces no additional visual change. Omit it whenever that is uncertain or interesting behavior remains possible.
@@ -109,4 +109,4 @@ On transparent input, require `vec4(0.0)` outside the effect, zero RGB wherever 
 
 When a `Progress` float exists, test and inspect `0.00`, `0.10`, `0.35`, `0.65`, `0.90`, and `1.00`. Check that the center is not accidentally filled at the start, the representative form appears mid-animation, radius or displacement changes naturally, density and Glow decay near the end, and no hidden RGB remains at completion.
 
-Require zero GLSL validation errors, successful WebGL 1 compilation and linking, successful display on all four inputs, passing premultiplied-alpha numerical checks, clean RGB-only diagnostics, visual inspection of all Progress checkpoints when applicable, a clearly demonstrative default, and a successful build. Never hand off a Shader Object JSON as complete before both `agent-shader test` and `agent-shader build` succeed. Do not run automated min/max rendering tests; apply the parameter-contract criterion when deciding whether each bound belongs in the JSON.
+Require zero GLSL validation errors, successful WebGL 1 compilation and linking, successful display on all four inputs, passing premultiplied-alpha numerical checks, clean RGB-only diagnostics, visual inspection of all Progress checkpoints when applicable, and a successful build. Treat an unchanged default as `default-no-visible-change` warning, not a failure. Use agent judgment to accept it when intentional and appropriate; otherwise choose a clearer default. Never hand off a Shader Object JSON as complete before both `agent-shader test` and `agent-shader build` succeed. Do not run automated min/max rendering tests; apply the parameter-contract criterion when deciding whether each bound belongs in the JSON.

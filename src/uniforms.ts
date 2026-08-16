@@ -90,7 +90,7 @@ export function inferParameters(
       diagnostics.push({
         severity: "error",
         code: "missing-default",
-        message: `${uniform.name} requires an explicit default chosen to make the shader effect easy to understand.`,
+        message: `${uniform.name} requires an explicit, deliberate default. A no-change value is allowed when intentional and appropriate.`,
       });
     }
     const defaultValue = override?.default ?? inferredDefault ?? zeroValue(uniform.type);

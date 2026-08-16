@@ -13,7 +13,7 @@ This repository contains three independently installable pieces:
 - `agent-shader` MCP server: the same capabilities exposed as local MCP tools
 - `panzoid-shader`: a portable Agent Skill for generating shaders that follow the Panzoid conventions
 
-The core model is intentionally static. Generated Panzoid parameters use `animated: false` and one value at frame zero; animation and keyframe inputs are not accepted. A build writes JSON only after validation, Chromium WebGL 1 compilation and rendering, four-background premultiplied-alpha checks, RGB-only diagnostics, and a visible-default check pass.
+The core model is intentionally static. Generated Panzoid parameters use `animated: false` and one value at frame zero; animation and keyframe inputs are not accepted. A build writes JSON only after validation, Chromium WebGL 1 compilation and rendering, four-background premultiplied-alpha checks, and RGB-only diagnostics. An unchanged default produces a warning but does not block a valid build.
 
 ## Requirements
 
@@ -74,7 +74,7 @@ agent-shader render fixtures/circle.glsl --out circle.png
 agent-shader test fixtures/circle.glsl --out-dir circle-test
 ```
 
-Every nonstandard numeric uniform requires an explicit default chosen to demonstrate its behavior clearly. Use `--config config.json` for those defaults or for explicit ranges:
+Every nonstandard numeric uniform requires an explicit, deliberate default. Prefer one that demonstrates the behavior clearly, but an unchanged default is valid when it is intentional and appropriate. Use `--config config.json` for those defaults or for explicit ranges:
 
 ```json
 {
@@ -99,7 +99,7 @@ Standard parameters are inferred without configuration:
 | `Rotation` | `float` | `0` | omitted |
 | `Scale` | `vec2` | `[1, 1]` | omitted |
 
-The test command renders the default X-Y grid, opaque black, transparent black, and a semi-transparent color. Every render also gets an RGB-only diagnostic PNG that exposes RGB hidden behind alpha. It checks premultiplied-alpha invariants and verifies that the default differs visibly from the unmodified input. If the shader declares `Progress`, it additionally renders `0.00`, `0.10`, `0.35`, `0.65`, `0.90`, and `1.00`. The agent must inspect every applicable normal and RGB-only PNG before handing off the JSON.
+The test command renders the default X-Y grid, opaque black, transparent black, and a semi-transparent color. Every render also gets an RGB-only diagnostic PNG that exposes RGB hidden behind alpha. It checks premultiplied-alpha invariants and reports whether the default differs visibly from the unmodified input. If it does not, `default-no-visible-change` is emitted as a warning and the test may still pass; the agent decides whether the unchanged default is intentional and appropriate. If the shader declares `Progress`, it additionally renders `0.00`, `0.10`, `0.35`, `0.65`, `0.90`, and `1.00`. The agent must inspect every applicable normal and RGB-only PNG before handing off the JSON.
 
 `min` and `max` are authoring decisions, not automated render tests. Do not add them merely to describe an intended, conventional, or useful range. Set a bound only when changing the value farther beyond that point produces no additional visual change; otherwise omit it. `Opacity` uses `0..1` because generated shaders clamp it and values outside that range therefore cannot change the result.
 

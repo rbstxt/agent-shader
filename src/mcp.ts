@@ -86,7 +86,7 @@ async function appendTestImages(content: McpContent[], report: TestReport): Prom
 
 function createServer(): McpServer {
   const server = new McpServer(
-    { name: "agent-shader", version: "0.1.5" },
+    { name: "agent-shader", version: "0.1.6" },
     { capabilities: { tools: {} } },
   );
 
@@ -111,7 +111,7 @@ function createServer(): McpServer {
     "build_shader_object",
     {
       title: "Build Panzoid Shader Object",
-      description: "Build Panzoid Shader Object JSON only after WebGL 1 rendering, four-input premultiplied-alpha tests, RGB-only diagnostics, Progress checkpoints, and the visible-default check pass.",
+      description: "Build Panzoid Shader Object JSON after WebGL 1 rendering, four-input premultiplied-alpha tests, RGB-only diagnostics, and Progress checkpoints. An unchanged default produces a warning rather than blocking the build.",
       inputSchema: z.object({
         ...sourceFields,
         ...previewFields,
@@ -142,7 +142,7 @@ function createServer(): McpServer {
         verified: report.passed,
         outputPath: writtenPath,
         parameters: result.parameters,
-        diagnostics: result.diagnostics,
+        diagnostics: report.diagnostics,
         report,
         shaderObject: report.passed && !writtenPath ? result.shaderObject : undefined,
       };
@@ -196,7 +196,7 @@ function createServer(): McpServer {
     "test_shader",
     {
       title: "Test Panzoid shader",
-      description: "Render four required inputs, premultiplied-alpha numerical checks, RGB-only diagnostics, Progress checkpoints, and the visible-default check in WebGL 1.",
+      description: "Render four required inputs, premultiplied-alpha numerical checks, RGB-only diagnostics, Progress checkpoints, and an advisory default-change check in WebGL 1.",
       inputSchema: z.object({
         ...sourceFields,
         outputDirectory: z.string().optional(),

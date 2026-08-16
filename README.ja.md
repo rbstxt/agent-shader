@@ -13,7 +13,7 @@ Panzoid Shader Object JSONの生成、Panzoid向けフラグメントシェー�
 - `agent-shader` MCPサーバー: 同じ機能をローカルMCPツールとして提供
 - `panzoid-shader`: Panzoid規約に沿ったシェーダーを生成するポータブルなAgent Skill
 
-生成するPanzoidパラメーターは静的で、`animated: false`とフレーム0の単一値を使用します。アニメーションやキーフレームの入力は扱いません。buildは、静的検証、Chromium WebGL 1でのコンパイルとレンダリング、4種類の背景に対するpremultiplied-alpha検査、RGB-only診断、デフォルト表示検査がすべて成功した場合にのみJSONを書き出します。
+生成するPanzoidパラメーターは静的で、`animated: false`とフレーム0の単一値を使用します。アニメーションやキーフレームの入力は扱いません。buildは、静的検証、Chromium WebGL 1でのコンパイルとレンダリング、4種類の背景に対するpremultiplied-alpha検査、RGB-only診断がすべて成功した場合にのみJSONを書き出します。デフォルト表示が入力と同一でも警告になるだけで、妥当なbuildを妨げません。
 
 ## 必要環境
 
@@ -74,7 +74,7 @@ agent-shader render fixtures/circle.glsl --out circle.png
 agent-shader test fixtures/circle.glsl --out-dir circle-test
 ```
 
-標準外の数値uniformには、その挙動が分かりやすい明示的なデフォルト値が必要です。デフォルト値や明示的な範囲は`--config config.json`で指定します。
+標準外の数値uniformには、意図して選んだ明示的なデフォルト値が必要です。通常は挙動が分かりやすい値を選びますが、変化しない値が意図的で妥当なら使用できます。デフォルト値や明示的な範囲は`--config config.json`で指定します。
 
 ```json
 {
@@ -99,7 +99,7 @@ agent-shader test fixtures/circle.glsl --out-dir circle-test
 | `Rotation` | `float` | `0` | 省略 |
 | `Scale` | `vec2` | `[1, 1]` | 省略 |
 
-testは、デフォルトのX-Yグリッド、不透明黒、完全透明黒、半透明色でレンダリングします。各入力について、通常PNGとAlphaを無視してRGBを表示する診断PNGを生成します。premultiplied-alphaの数値条件と、デフォルト表示が入力から目に見えて変化していることも検査します。`Progress`が宣言されている場合は、`0.00`、`0.10`、`0.35`、`0.65`、`0.90`、`1.00`もレンダリングします。JSONを渡す前に、エージェントが該当するすべての通常画像とRGB-only画像を目視確認します。
+testは、デフォルトのX-Yグリッド、不透明黒、完全透明黒、半透明色でレンダリングします。各入力について、通常PNGとAlphaを無視してRGBを表示する診断PNGを生成します。premultiplied-alphaの数値条件と、デフォルト表示が入力から目に見えて変化しているかも検査します。変化がない場合は`default-no-visible-change`警告を出しますが、テスト自体は成功できます。エージェントが、その無変化のデフォルトが意図的で妥当かを判断します。`Progress`が宣言されている場合は、`0.00`、`0.10`、`0.35`、`0.65`、`0.90`、`1.00`もレンダリングします。JSONを渡す前に、エージェントが該当するすべての通常画像とRGB-only画像を目視確認します。
 
 `min`と`max`は自動レンダリングテストではなく、作成時の判断で設定します。想定範囲、慣習、安全性、便利さだけを理由に追加しません。通常は、その値をさらに変えても表示が一切変わらなくなる境界だけを設定し、それ以外は省略します。`Opacity`はシェーダー内でclampされ、範囲外で結果が変わらないため`0..1`を設定します。
 

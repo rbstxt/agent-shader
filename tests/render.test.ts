@@ -46,6 +46,20 @@ test("verifies that defaults visibly demonstrate the effect", async () => {
   assert.equal(report.opacityZeroCheck?.passed, true);
 });
 
+test("warns but passes when an unchanged default is intentional", async () => {
+  const source = await readFile(resolve(".agents/skills/panzoid-shader/assets/base.glsl"), "utf8");
+  const report = await testShader(source, {}, {
+    width: 160,
+    height: 90,
+    outputDirectory: join(process.cwd(), ".test-output", "unchanged-default-report"),
+  });
+  assert.equal(report.passed, true);
+  assert.equal(report.defaultEffectCheck?.passed, false);
+  assert.ok(report.diagnostics.some(
+    (item) => item.code === "default-no-visible-change" && item.severity === "warning",
+  ));
+});
+
 test("renders every Progress checkpoint with premultiplied output", async () => {
   const source = await readFile(resolve("fixtures/progress.glsl"), "utf8");
   const config = JSON.parse(await readFile(resolve("fixtures/progress.config.json"), "utf8"));

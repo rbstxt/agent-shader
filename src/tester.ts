@@ -73,6 +73,14 @@ export async function testShader(
     inputHash: inputRender.pixelSummary.hash,
     passed: defaultRender.pixelSummary.hash !== inputRender.pixelSummary.hash,
   };
+  const diagnostics = [...build.diagnostics];
+  if (!defaultEffectCheck.passed) {
+    diagnostics.push({
+      severity: "warning",
+      code: "default-no-visible-change",
+      message: "Default values produce no visible change from the input. Keep them only when that unchanged default is intentional and appropriate.",
+    });
+  }
 
   const transparentRender = inputRenders.find((item) => item.name === "transparent-black")?.render;
   const semiTransparentRender = inputRenders.find((item) => item.name === "semi-transparent-color")?.render;
@@ -150,11 +158,10 @@ export async function testShader(
   );
   const report: TestReport = {
     passed:
-      defaultEffectCheck.passed &&
       premultipliedAlphaCheck.passed &&
       opacityZeroCheck.passed &&
       progressPremultiplied,
-    diagnostics: build.diagnostics,
+    diagnostics,
     defaultRender,
     defaultEffectCheck,
     inputRenders,
