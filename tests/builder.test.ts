@@ -39,6 +39,16 @@ test("builds the static Panzoid Shader Object shape", async () => {
   ]);
 });
 
+test("builds without optional standard parameters", async () => {
+  const source = await readFile(resolve(".agents/skills/panzoid-shader/assets/base.glsl"), "utf8");
+  const result = buildShaderObject(source, { name: "Pass Through" });
+  assert.equal(result.diagnostics.filter((item) => item.severity === "error").length, 0);
+  assert.deepEqual(result.parameters, []);
+  const root = result.shaderObject[0] as Record<string, unknown>;
+  const data = (root.data as Array<Record<string, unknown>>)[0];
+  assert.deepEqual(data.customProperties, []);
+});
+
 test("infers short shader names from filenames and preserves explicit names", () => {
   assert.equal(inferShaderName("/tmp/glowing-ring.glsl"), "Glowing Ring");
   assert.equal(inferShaderName("/tmp/ShockwaveShader.frag"), "Shockwave");

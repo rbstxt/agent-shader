@@ -86,7 +86,7 @@ async function appendTestImages(content: McpContent[], report: TestReport): Prom
 
 function createServer(): McpServer {
   const server = new McpServer(
-    { name: "agent-shader", version: "0.1.6" },
+    { name: "agent-shader", version: "0.1.7" },
     { capabilities: { tools: {} } },
   );
 

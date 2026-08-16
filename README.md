@@ -87,7 +87,7 @@ Every nonstandard numeric uniform requires an explicit, deliberate default. Pref
 }
 ```
 
-Standard parameters are inferred without configuration:
+Standard parameters are optional and inferred without configuration only when their matching uniforms are declared. Omit any control that does not provide meaningful behavior for the shader; an effect may use any subset or none of them.
 
 | Uniform | Type | Default | Bounds |
 | --- | --- | --- | --- |
@@ -98,6 +98,8 @@ Standard parameters are inferred without configuration:
 | `Position` | `vec2` | `[0, 0]` | omitted |
 | `Rotation` | `float` | `0` | omitted |
 | `Scale` | `vec2` | `[1, 1]` | omitted |
+
+The only required shader inputs are `tDiffuse` and `vUvScaled`. `Color`, `StartColor`, `EndColor`, `Opacity`, `Position`, `Rotation`, and `Scale` may all be omitted independently. The generated `customProperties` array contains only uniforms actually declared by the shader.
 
 The test command renders the default X-Y grid, opaque black, transparent black, and a semi-transparent color. Every render also gets an RGB-only diagnostic PNG that exposes RGB hidden behind alpha. It checks premultiplied-alpha invariants and reports whether the default differs visibly from the unmodified input. If it does not, `default-no-visible-change` is emitted as a warning and the test may still pass; the agent decides whether the unchanged default is intentional and appropriate. If the shader declares `Progress`, it additionally renders `0.00`, `0.10`, `0.35`, `0.65`, `0.90`, and `1.00`. The agent must inspect every applicable normal and RGB-only PNG before handing off the JSON.
 
@@ -155,6 +157,8 @@ float outputAlpha = sourceAlpha + remainingBackground;
 vec3 outputColor = sourceColor * sourceAlpha + texel.rgb * remainingBackground;
 gl_FragColor = vec4(outputColor, outputAlpha);
 ```
+
+This example includes optional `Opacity` and `sourceColor` controls. If they are unnecessary, compute the source alpha or color internally and omit their uniforms; do not add controls only to match the example.
 
 On `vec4(0.0)` input this reduces to `vec4(sourceColor * sourceAlpha, sourceAlpha)`. The validator rejects division by `outputAlpha` and direct `vec4(sourceColor, sourceAlpha)` output. Tests require zero hidden RGB at alpha zero, RGB attenuation with alpha, `Opacity = 0` input preservation, and normally `R <= A`, `G <= A`, and `B <= A` for colors in `0..1`.
 

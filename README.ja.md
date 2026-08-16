@@ -87,7 +87,7 @@ agent-shader test fixtures/circle.glsl --out-dir circle-test
 }
 ```
 
-標準パラメーターは設定なしで推論されます。
+標準パラメーターはすべて任意で、対応するuniformを宣言した場合だけ設定なしで推論されます。シェーダーに意味のある操作を提供しないパラメーターは省略し、必要な一部だけ、または一つも使用しない構成にできます。
 
 | Uniform | 型 | デフォルト | 範囲 |
 | --- | --- | --- | --- |
@@ -98,6 +98,8 @@ agent-shader test fixtures/circle.glsl --out-dir circle-test
 | `Position` | `vec2` | `[0, 0]` | 省略 |
 | `Rotation` | `float` | `0` | 省略 |
 | `Scale` | `vec2` | `[1, 1]` | 省略 |
+
+必須のシェーダー入力は`tDiffuse`と`vUvScaled`だけです。`Color`、`StartColor`、`EndColor`、`Opacity`、`Position`、`Rotation`、`Scale`はそれぞれ独立して省略できます。生成される`customProperties`には、シェーダーが実際に宣言したuniformだけが含まれます。
 
 testは、デフォルトのX-Yグリッド、不透明黒、完全透明黒、半透明色でレンダリングします。各入力について、通常PNGとAlphaを無視してRGBを表示する診断PNGを生成します。premultiplied-alphaの数値条件と、デフォルト表示が入力から目に見えて変化しているかも検査します。変化がない場合は`default-no-visible-change`警告を出しますが、テスト自体は成功できます。エージェントが、その無変化のデフォルトが意図的で妥当かを判断します。`Progress`が宣言されている場合は、`0.00`、`0.10`、`0.35`、`0.65`、`0.90`、`1.00`もレンダリングします。JSONを渡す前に、エージェントが該当するすべての通常画像とRGB-only画像を目視確認します。
 
@@ -155,6 +157,8 @@ float outputAlpha = sourceAlpha + remainingBackground;
 vec3 outputColor = sourceColor * sourceAlpha + texel.rgb * remainingBackground;
 gl_FragColor = vec4(outputColor, outputAlpha);
 ```
+
+この例の`Opacity`と`sourceColor`操作は任意です。不要ならsource alphaや色をシェーダー内部で決定し、対応するuniformを省略してください。例に合わせるためだけに操作項目を追加しません。
 
 入力が`vec4(0.0)`なら、結果は`vec4(sourceColor * sourceAlpha, sourceAlpha)`になります。validatorは`outputAlpha`による除算と、直接の`vec4(sourceColor, sourceAlpha)`出力を拒否します。テストでは、Alphaが0の場所にhidden RGBがないこと、Alphaと同時にRGBも減衰すること、`Opacity = 0`で入力と完全一致すること、色が`0..1`なら原則として`R <= A`、`G <= A`、`B <= A`になることを確認します。
 

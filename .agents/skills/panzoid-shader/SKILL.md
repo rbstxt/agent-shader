@@ -22,10 +22,10 @@ Use the repository CLI or MCP tools to produce a complete, tested Panzoid Shader
 - Start with `precision highp float;` and `precision highp int;`.
 - Declare `uniform sampler2D tDiffuse;` and `varying vec2 vUvScaled;`.
 - Prefer `vUvScaled` as the screen-space UV source. Add a resolution-like uniform only when the user explicitly requests it or the effect genuinely needs externally supplied dimensions.
-- Map effect space with `vec2 p = vUvScaled * 2.0 - 1.0;`.
-- Subtract `Position`, then scale centered x by `16.0 / 9.0`.
-- Express `Rotation` in clockwise degrees.
-- Treat `Scale` as a `vec2` multiplier with `[1, 1]` as the default.
+- Map effect space with `vec2 p = vUvScaled * 2.0 - 1.0;` only when centered effect coordinates are useful.
+- When `Position` is present, subtract it before applying the `16.0 / 9.0` centered-x correction needed by aspect-sensitive geometry.
+- When `Rotation` is present, express it in clockwise degrees.
+- When `Scale` is present, treat it as a `vec2` multiplier with `[1, 1]` as the default.
 - Sample the source with `texture2D(tDiffuse, vUvScaled)` unless intentional distortion requires modified UVs.
 - Composite drawn pixels over `tDiffuse` using source-over and output premultiplied-alpha. Do not divide the resulting RGB by the output alpha.
 - Do not add anti-aliasing unless the user explicitly asks for it. This is an agent decision, not a validator rule.
@@ -51,6 +51,8 @@ vec3 outputColor =
 
 gl_FragColor = vec4(outputColor, outputAlpha);
 ```
+
+When `Opacity` is omitted, compute `sourceAlpha` from the effect's fixed or internal alpha without referencing it. When `Color` is omitted, compute `sourceColor` internally or from a sampled texture. Do not expose either control solely to match the example.
 
 Never divide premultiplied RGB by `outputAlpha`. Never output `vec4(sourceColor, sourceAlpha)`. When `tDiffuse` is `vec4(0.0)`, the result must be equivalent to:
 
@@ -78,9 +80,9 @@ Fully transparent and low-alpha pixels must not retain unattenuated source RGB. 
 
 ## Parameter contract
 
-- Use `vec3 Color` for one color.
-- Use `vec3 StartColor` and `vec3 EndColor` for endpoints.
-- Use `float Opacity`, `vec2 Position`, `float Rotation`, and `vec2 Scale`.
+- Declare only parameters that provide a meaningful control for the requested shader. `Color`, `StartColor`, `EndColor`, `Opacity`, `Position`, `Rotation`, and `Scale` are all optional and may be omitted independently.
+- When present, use `vec3 Color` for one color and `vec3 StartColor` plus `vec3 EndColor` for endpoints.
+- When present, use `float Opacity`, `vec2 Position`, `float Rotation`, and `vec2 Scale`.
 - Use PascalCase for other parameters.
 - Never prefix parameters with `u`.
 - Keep parameters static. Do not accept animation or keyframe input.
@@ -90,7 +92,7 @@ Fully transparent and low-alpha pixels must not retain unattenuated source RGB. 
 - Decide whether to set `min` or `max` while authoring the JSON. Do not add bounds merely because a range seems valid, useful, safe, conventional, or intended.
 - Set a bound only at the point beyond which changing the value further produces no additional visual change. Omit it whenever that is uncertain or interesting behavior remains possible.
 - As a deliberate exception, set `min` to `0` for a magnitude-only parameter when negative values merely reverse or mirror the same size behavior and do not provide a meaningfully distinct control.
-- Set `Opacity` to `0..1` because the shader must clamp it to that range.
+- When `Opacity` is present, set it to `0..1` because the shader must clamp it to that range.
 - Do not bound `Position`, `Rotation`, `Scale`, or colors.
 
 ## Panzoid JSON
@@ -105,7 +107,7 @@ Use the bundled X-Y grid as `tDiffuse` when testing coordinate warps and distort
 
 Every shader test must render the default X-Y grid, opaque black `vec4(0, 0, 0, 1)`, transparent black `vec4(0, 0, 0, 0)`, and semi-transparent color `vec4(0.2, 0.5, 0.8, 0.25)`. Inspect both the normal PNG and the RGB-only diagnostic for every input. The RGB-only image ignores output alpha so hidden RGB remains visible.
 
-On transparent input, require `vec4(0.0)` outside the effect, zero RGB wherever alpha is zero, RGB attenuation as alpha decreases, exact input preservation at `Opacity = 0`, and no bright hidden RGB. When `Color` is within `0..1`, each output RGB component should normally be no greater than output alpha.
+On transparent input, require `vec4(0.0)` outside the effect, zero RGB wherever alpha is zero, RGB attenuation as alpha decreases, and no bright hidden RGB. When `Opacity` is present, require exact input preservation at `Opacity = 0`. When `Color` is present and within `0..1`, each output RGB component should normally be no greater than output alpha.
 
 When a `Progress` float exists, test and inspect `0.00`, `0.10`, `0.35`, `0.65`, `0.90`, and `1.00`. Check that the center is not accidentally filled at the start, the representative form appears mid-animation, radius or displacement changes naturally, density and Glow decay near the end, and no hidden RGB remains at completion.
 
